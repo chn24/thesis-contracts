@@ -44,6 +44,10 @@ contract VotingManager is IVotingManager, Ownable2Step {
         implement = _implement;
     }
 
+    function setAccountManager(IAccountManager _accountManager) public onlyOwner {
+        accountManager = _accountManager;
+    }
+
     function handleDelegate(address _user, address delegater) public view returns (uint24) {
         require(!IVoting(votings[totalVoting]).checkUserVoted(_user), "User had voted");
         require(!IVoting(votings[totalVoting]).checkUserVoted(delegater), "You had voted");

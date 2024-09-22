@@ -10,6 +10,7 @@ import "hardhat/console.sol";
 contract AccountManager is IAccountManager, Ownable2Step {
     bool private initialized;
     IVotingManager public votingManager;
+    string private message;
 
     mapping(address => bool) public isAdmin;
     mapping(address => bool) public isValidSender;
@@ -23,9 +24,10 @@ contract AccountManager is IAccountManager, Ownable2Step {
         _;
     }
 
-    function initialize() public {
+    function initialize(string memory _message) public {
         require(!initialized, "Initialized");
         isAdmin[msg.sender] = true;
+        message = _message;
         initOwnable(msg.sender);
         initialized = true;
     }
@@ -69,5 +71,64 @@ contract AccountManager is IAccountManager, Ownable2Step {
         require(balances[user][currentRound] > 0, "You can't vote");
         require(delegateInfos[user][currentRound].amount == 0, "You have delegated");
         return balances[user][currentRound];
+    }
+
+    function getMessageHash(address user, uint128 amount) public returns(bytes32) {
+        return keccak256(abi.encodePacked(message, user, amount));
+
+    }
+
+    function getEthSignedMessageHash(bytes32 _messageHash)
+        public
+        pure
+        returns (bytes32)
+    {
+        return keccak256(
+            abi.encodePacked("\x19Ethereum Signed Message:\n32", _messageHash)
+        );
+    }
+
+    function recoverSigner(
+        bytes32 _ethSignedMessageHash,
+        bytes memory _signature
+    ) public pure returns (address) {
+        (bytes32 r, bytes32 s, uint8 v) = splitSignature(_signature);
+
+        return ecrecover(_ethSignedMessageHash, v, r, s);
+    }
+
+    function splitSignature(bytes memory sig)
+        public
+        pure
+        returns (bytes32 r, bytes32 s, uint8 v)
+    {
+        require(sig.length == 65, "invalid signature length");
+
+        assembly {
+            // first 32 bytes, after the length prefix
+            r := mload(add(sig, 32))
+            // second 32 bytes
+            s := mload(add(sig, 64))
+            // final byte (first byte of the next 32 bytes)
+            v := byte(0, mload(add(sig, 96)))
+        }
+
+        // implicitly return (r, s, v)
+    }
+
+    function verify(
+        address evmAddress, uint128 amount,
+        bytes memory signature
+    ) public {
+        bytes32 messageHash = getMessageHash( evmAddress, amount);
+        bytes32 ethSignedMessageHash = getEthSignedMessageHash(messageHash);
+
+        address signer = recoverSigner(ethSignedMessageHash, signature) ;
+
+        require(isAdmin[signer], "Invalid signature");
+        uint24 currentRound = votingManager.totalVoting();
+        require(balances[msg.sender][currentRound] == 0, "You have verified");
+
+        balances[msg.sender][currentRound] = amount;
     }
 }

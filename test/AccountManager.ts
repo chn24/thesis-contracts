@@ -10,7 +10,7 @@ describe("AccountManager", async function () {
 
         const AccountManager = await ethers.getContractFactory("AccountManager");
         const accountManager = await AccountManager.deploy();
-        await accountManager.initialize();
+        await accountManager.initialize("verify");
         const accountManagerAddress = accountManager.address;
 
         const Voting = await ethers.getContractFactory("Voting");

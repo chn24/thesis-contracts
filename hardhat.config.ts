@@ -13,10 +13,10 @@ const config: HardhatUserConfig = {
             // },
         },
         testnet: {
-            url: "https://public.stackup.sh/api/v1/node/arbitrum-sepolia",
+            url: "https://arbitrum-sepolia.blockpi.network/v1/rpc/public",
             chainId: 421614,
             // gasPrice: 20000000000,
-            accounts: [],
+            accounts: process.env.DEPLOYER_PRIVATE_KEY ? [process.env.DEPLOYER_PRIVATE_KEY] : [],
         },
         xchainTest: {
             url: "https://test-rpc.xgainer.xyz",
