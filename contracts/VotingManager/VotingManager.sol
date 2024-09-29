@@ -17,7 +17,7 @@ contract VotingManager is IVotingManager, Ownable2Step {
 
     mapping(uint24 => address) public votings;
 
-    event NewVoting(uint24 indexed index, address voting);
+    event NewVoting(uint24 indexed index, uint24 startTime, address voting, bytes title);
 
     function initialize(address _implement, IAccountManager _accountManager) public {
         require(!initialized, "Initialized");
@@ -26,7 +26,7 @@ contract VotingManager is IVotingManager, Ownable2Step {
         initialized = true;
     }
 
-    function createVoting() public onlyOwner returns (address) {
+    function createVoting(bytes memory title, uint24 startTime) public onlyOwner returns (address) {
         address _owner = owner();
         totalVoting += 1;
         bytes32 _salt = keccak256(abi.encodePacked(totalVoting, block.timestamp));
@@ -35,7 +35,7 @@ contract VotingManager is IVotingManager, Ownable2Step {
         votings[totalVoting] = voting;
         accountManager.setIsValidSender(voting, true);
 
-        emit NewVoting(totalVoting, voting);
+        emit NewVoting(totalVoting, startTime, voting, title);
 
         return voting;
     }

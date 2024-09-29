@@ -73,7 +73,7 @@ contract AccountManager is IAccountManager, Ownable2Step {
         return balances[user][currentRound];
     }
 
-    function getMessageHash(address user, uint128 amount) public returns(bytes32) {
+    function getMessageHash(address user, uint128 amount) public view returns(bytes32) {
         return keccak256(abi.encodePacked(message, user, amount));
 
     }
@@ -124,6 +124,8 @@ contract AccountManager is IAccountManager, Ownable2Step {
         bytes32 ethSignedMessageHash = getEthSignedMessageHash(messageHash);
 
         address signer = recoverSigner(ethSignedMessageHash, signature) ;
+        console.logBytes32(messageHash);
+        console.log(signer);
 
         require(isAdmin[signer], "Invalid signature");
         uint24 currentRound = votingManager.totalVoting();

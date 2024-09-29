@@ -148,4 +148,16 @@ describe("AccountManager", async function () {
             await expect(accountManager.delegate(delegatedUser.address)).to.be.rejectedWith("User had voted");
         });
     });
+
+    describe.only("Verify with signature", async function () {
+        it("", async function () {
+            const { accountManager } = await loadFixture(deployContracts);
+
+            const address = "0x555BdfdBC34D551884AAca9225f92F7c7F7c3f45";
+            const signature =
+                "0xb5add36295ca2088a392c66c0bbde4299611967e6b5d113abe966cae1bafbd3a3e25cdc49aaa75818fadc29c76c932e7839e00874d0291435e54da9e8b9254311c";
+
+            await accountManager.verify(address.toLowerCase(), 5000, signature);
+        });
+    });
 });
