@@ -31,6 +31,7 @@ contract Voting is Ownable2Step, IVoting {
 
     function addProposal(bytes[] calldata contents, bool[] calldata isImportants) public onlyOwner {
         require(contents.length == isImportants.length, "Invalid array length");
+        require(contents.length != 0, "Empty");
         uint256 length = contents.length;
         for (uint16 i = 0; i < length; i++) {
             Proposal storage _proposal = proposals[totalProposal + i + 1];
