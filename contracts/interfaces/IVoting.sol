@@ -7,6 +7,7 @@ import "./IAccountManager.sol";
 interface IVoting {
     enum STATUS {
         NOT_YET,
+        PAUSED,
         OPEN,
         CLOSED
     }

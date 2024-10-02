@@ -44,15 +44,9 @@ contract AccountManager is IAccountManager, Ownable2Step {
         isAdmin[_admin] = _isAdmin;
     }
 
-    function verifyBalance(uint128 amount) public {
-        uint24 currentRound = votingManager.totalVoting();
-        require(balances[msg.sender][currentRound] == 0, "You have verified");
-        balances[msg.sender][currentRound] = amount;
-    }
-
     function delegate(address user) public {
         uint24 currentRound = votingManager.handleDelegate(user, msg.sender);
-        require(balances[msg.sender][currentRound] > 0, "You must veridy balance first");
+        require(balances[msg.sender][currentRound] > 0, "You must verify balance first");
         require(balances[user][currentRound] > 0, "User haven't verified balance yet");
         require(delegateInfos[user][currentRound].amount == 0, "User had delegated");
         require(delegateInfos[msg.sender][currentRound].amount == 0, "You had delegated");
@@ -73,35 +67,21 @@ contract AccountManager is IAccountManager, Ownable2Step {
         return balances[user][currentRound];
     }
 
-    function getMessageHash(address user, uint128 amount) public view returns(bytes32) {
+    function getMessageHash(address user, uint128 amount) public view returns (bytes32) {
         return keccak256(abi.encodePacked(message, user, amount));
-
     }
 
-    function getEthSignedMessageHash(bytes32 _messageHash)
-        public
-        pure
-        returns (bytes32)
-    {
-        return keccak256(
-            abi.encodePacked("\x19Ethereum Signed Message:\n32", _messageHash)
-        );
+    function getEthSignedMessageHash(bytes32 _messageHash) public pure returns (bytes32) {
+        return keccak256(abi.encodePacked("\x19Ethereum Signed Message:\n32", _messageHash));
     }
 
-    function recoverSigner(
-        bytes32 _ethSignedMessageHash,
-        bytes memory _signature
-    ) public pure returns (address) {
+    function recoverSigner(bytes32 _ethSignedMessageHash, bytes memory _signature) public pure returns (address) {
         (bytes32 r, bytes32 s, uint8 v) = splitSignature(_signature);
 
         return ecrecover(_ethSignedMessageHash, v, r, s);
     }
 
-    function splitSignature(bytes memory sig)
-        public
-        pure
-        returns (bytes32 r, bytes32 s, uint8 v)
-    {
+    function splitSignature(bytes memory sig) public pure returns (bytes32 r, bytes32 s, uint8 v) {
         require(sig.length == 65, "invalid signature length");
 
         assembly {
@@ -116,16 +96,11 @@ contract AccountManager is IAccountManager, Ownable2Step {
         // implicitly return (r, s, v)
     }
 
-    function verify(
-        address evmAddress, uint128 amount,
-        bytes memory signature
-    ) public {
-        bytes32 messageHash = getMessageHash( evmAddress, amount);
+    function verify(uint128 amount, bytes memory signature) public {
+        bytes32 messageHash = getMessageHash(msg.sender, amount);
         bytes32 ethSignedMessageHash = getEthSignedMessageHash(messageHash);
 
-        address signer = recoverSigner(ethSignedMessageHash, signature) ;
-        console.logBytes32(messageHash);
-        console.log(signer);
+        address signer = recoverSigner(ethSignedMessageHash, signature);
 
         require(isAdmin[signer], "Invalid signature");
         uint24 currentRound = votingManager.totalVoting();
@@ -133,4 +108,23 @@ contract AccountManager is IAccountManager, Ownable2Step {
 
         balances[msg.sender][currentRound] = amount;
     }
+
+    // function delegateVerify(address delegatedUser, uint128 amount, bytes memory signature) public {
+    //     uint24 currentRound = votingManager.totalVoting();
+    //     require(balances[delegatedUser][currentRound] > 0, "User haven't verified balance yet");
+    //     require(delegateInfos[delegatedUser][currentRound].amount == 0, "User had delegated");
+    //     require(delegateInfos[msg.sender][currentRound].amount == 0, "You had delegated");
+    //     bytes32 messageHash = getMessageHash(msg.sender, amount);
+    //     bytes32 ethSignedMessageHash = getEthSignedMessageHash(messageHash);
+
+    //     address signer = recoverSigner(ethSignedMessageHash, signature);
+
+    //     require(isAdmin[signer], "Invalid signature");
+    //     require(balances[msg.sender][currentRound] == 0, "You have verified");
+
+    //     balances[msg.sender][currentRound] = amount;
+    //     balances[delegatedUser][currentRound] += balances[msg.sender][currentRound];
+    //     delegateInfos[msg.sender][currentRound] = DelegateInfo(delegatedUser, balances[msg.sender][currentRound]);
+
+    // }
 }

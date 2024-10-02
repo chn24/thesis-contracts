@@ -3,15 +3,28 @@ import { loadFixture } from "ethereum-waffle";
 import { BigNumber } from "ethers";
 import { AbiCoder, toUtf8Bytes } from "ethers/lib/utils";
 import { ethers } from "hardhat";
+import Web3 from "web3";
+
+const abi = new AbiCoder();
+const web3 = new Web3();
+
+enum STATUS {
+    NOT_YET,
+    PAUSED,
+    OPEN,
+    CLOSED,
+}
 
 describe("Voting", async function () {
     async function deployContracts() {
         const [owner, ...otherAccounts] = await ethers.getSigners();
+        const admin = "0x555BdfdBC34D551884AAca9225f92F7c7F7c3f45";
 
         const AccountManager = await ethers.getContractFactory("AccountManager");
         const accountManager = await AccountManager.deploy();
-        await accountManager.initialize();
+        await accountManager.initialize("verify");
         const accountManagerAddress = accountManager.address;
+        await accountManager.setIsAdmin(admin, true);
 
         const Voting = await ethers.getContractFactory("Voting");
         const voting = await Voting.deploy();
@@ -23,9 +36,12 @@ describe("Voting", async function () {
 
         await accountManager.setIsAdmin(votingManagerAddress, true);
 
+        const titleEncoded = abi.encode(["string"], ["Đại hội cổ đông thường niên 10/2024"]);
+        const time = (new Date().getTime() / (1000 * 86400)).toFixed();
+
         await votingManager.initialize(votingAddress, accountManagerAddress);
         await accountManager.setVotingManager(votingManagerAddress);
-        await votingManager.createVoting();
+        await votingManager.createVoting(titleEncoded, time);
         const firstVotingAddress = await votingManager.votings(1);
 
         const firstVoting = Voting.attach(firstVotingAddress);
@@ -39,6 +55,14 @@ describe("Voting", async function () {
         };
     }
 
+    describe("initilize", async function () {
+        it("Fail: initilized", async function () {
+            const { firstVoting, owner, accountManagerAddress } = await loadFixture(deployContracts);
+
+            await expect(firstVoting.initialize(owner.address, accountManagerAddress)).to.be.rejectedWith("initialized");
+        });
+    });
+
     describe("Add Proposal", async function () {
         it("Fail: Only owner can add", async function () {
             const { otherAccounts, firstVoting } = await loadFixture(deployContracts);
@@ -50,7 +74,7 @@ describe("Voting", async function () {
         it("Fail: invalid length 1", async function () {
             const { firstVoting, owner } = await loadFixture(deployContracts);
 
-            const content1 = ethers.utils.keccak256(toUtf8Bytes("abc def"));
+            const content1 = ethers.utils.keccak256(toUtf8Bytes("Đề xuất 1"));
 
             await expect(firstVoting.addProposal([content1], [true, false])).to.be.rejectedWith("Invalid array length");
         });
@@ -58,18 +82,21 @@ describe("Voting", async function () {
         it("Fail: invalid length 2", async function () {
             const { firstVoting, owner } = await loadFixture(deployContracts);
 
-            const content = ethers.utils.keccak256(toUtf8Bytes("abc"));
+            const content = ethers.utils.keccak256(toUtf8Bytes("Đề xuất 1"));
 
             await expect(firstVoting.addProposal([content, content], [true])).to.be.rejectedWith("Invalid array length");
+        });
+
+        it("Faile: Empty", async function () {
+            const { firstVoting, owner } = await loadFixture(deployContracts);
+            await expect(firstVoting.addProposal([], [])).to.be.rejectedWith("Empty");
         });
 
         it("Complete", async function () {
             const { firstVoting } = await loadFixture(deployContracts);
 
-            const abi = new AbiCoder();
-
-            const content1 = abi.encode(["string"], ["abc"]);
-            const content2 = abi.encode(["string"], ["def"]);
+            const content1 = abi.encode(["string"], ["Đề xuất 1"]);
+            const content2 = abi.encode(["string"], ["Đề xuất 2"]);
 
             const tx = await firstVoting.addProposal([content1, content2], [true, false]);
 
@@ -80,8 +107,8 @@ describe("Voting", async function () {
 
             const totalProposal = await firstVoting.totalProposal();
 
-            expect(abi.decode(["string"], contentsEvent[0])[0]).to.be.eq("abc");
-            expect(abi.decode(["string"], contentsEvent[1])[0]).to.be.eq("def");
+            expect(abi.decode(["string"], contentsEvent[0])[0]).to.be.eq("Đề xuất 1");
+            expect(abi.decode(["string"], contentsEvent[1])[0]).to.be.eq("Đề xuất 2");
             expect(totalProposal).to.be.eq(2);
         });
     });
@@ -92,37 +119,47 @@ describe("Voting", async function () {
 
             const user = otherAccounts[0];
 
-            await expect(firstVoting.connect(user).setStatus(1)).to.be.rejectedWith("Ownable: caller is not the owner");
+            await expect(firstVoting.connect(user).setStatus(STATUS.PAUSED)).to.be.rejectedWith("Ownable: caller is not the owner");
+        });
+
+        it("Complete: Set PAUSED", async function () {
+            const { firstVoting } = await loadFixture(deployContracts);
+
+            await firstVoting.setStatus(STATUS.PAUSED);
+
+            const status = await firstVoting.status();
+
+            expect(status).to.be.eq(STATUS.PAUSED);
         });
 
         it("Complete: Set OPEN", async function () {
             const { firstVoting } = await loadFixture(deployContracts);
 
-            await firstVoting.setStatus(1);
+            await firstVoting.setStatus(STATUS.OPEN);
 
             const status = await firstVoting.status();
 
-            expect(status).to.be.eq(1);
+            expect(status).to.be.eq(STATUS.OPEN);
         });
 
         it("Complete: Set CLOSED", async function () {
             const { firstVoting } = await loadFixture(deployContracts);
 
-            await firstVoting.setStatus(2);
+            await firstVoting.setStatus(STATUS.CLOSED);
 
             const status = await firstVoting.status();
 
-            expect(status).to.be.eq(2);
+            expect(status).to.be.eq(STATUS.CLOSED);
         });
 
         it("Complete: Set NOT_YET", async function () {
             const { firstVoting } = await loadFixture(deployContracts);
 
-            await firstVoting.setStatus(0);
+            await firstVoting.setStatus(STATUS.NOT_YET);
 
             const status = await firstVoting.status();
 
-            expect(status).to.be.eq(0);
+            expect(status).to.be.eq(STATUS.NOT_YET);
         });
     });
 
@@ -136,7 +173,7 @@ describe("Voting", async function () {
         it("Fail: Invalid length (less than total)", async function () {
             const { firstVoting } = await loadFixture(deployContracts);
 
-            await firstVoting.setStatus(1);
+            await firstVoting.setStatus(STATUS.OPEN);
 
             await expect(firstVoting.vote([])).to.be.rejectedWith("Invalid length");
         });
@@ -163,7 +200,7 @@ describe("Voting", async function () {
         });
 
         it("Fail: User cannot vote", async function () {
-            const { firstVoting, accountManager } = await loadFixture(deployContracts);
+            const { firstVoting, accountManager, owner } = await loadFixture(deployContracts);
 
             await expect(
                 firstVoting.vote([
@@ -178,7 +215,9 @@ describe("Voting", async function () {
                 ]),
             ).to.be.rejectedWith("You can't vote");
 
-            await accountManager.verifyBalance(100000);
+            const messageHash = await accountManager.getMessageHash(owner.address, 100000);
+            const signature = web3.eth.accounts.sign(messageHash, process.env.DEPLOYER_PRIVATE_KEY ?? "");
+            await accountManager.verify(100000, signature.signature);
         });
 
         it("Fail: Invalid index", async function () {
@@ -271,12 +310,18 @@ describe("Voting", async function () {
 
             const user = otherAccounts[0];
             const delegatedUser = otherAccounts[1];
-            await accountManager.connect(delegatedUser).verifyBalance(1000);
-            await accountManager.connect(user).verifyBalance(1000);
 
-            await firstVoting.setStatus(0);
+            const messageHash1 = await accountManager.getMessageHash(delegatedUser.address, 1000);
+            const signature1 = web3.eth.accounts.sign(messageHash1, process.env.DEPLOYER_PRIVATE_KEY ?? "");
+            await accountManager.connect(delegatedUser).verify(1000, signature1.signature);
+
+            const messageHash2 = await accountManager.getMessageHash(user.address, 1000);
+            const signature2 = web3.eth.accounts.sign(messageHash2, process.env.DEPLOYER_PRIVATE_KEY ?? "");
+            await accountManager.connect(user).verify(1000, signature2.signature);
+
+            await firstVoting.setStatus(STATUS.NOT_YET);
             await accountManager.connect(user).delegate(delegatedUser.address);
-            await firstVoting.setStatus(1);
+            await firstVoting.setStatus(STATUS.OPEN);
 
             const instance = firstVoting.connect(user);
 
@@ -328,6 +373,24 @@ describe("Voting", async function () {
             expect(results[1].agree).to.be.eq(BigNumber.from(102000));
             expect(results[1].ignore).to.be.eq(BigNumber.from(0));
             expect(results[1].noComment).to.be.eq(BigNumber.from(0));
+        });
+    });
+
+    describe("get result uinque index", async function () {
+        it("Fail: Invalid index", async function () {
+            const { firstVoting } = await loadFixture(deployContracts);
+
+            await expect(firstVoting.getResultOfProposal(10)).to.be.rejectedWith("Invalid index");
+        });
+
+        it("Complete", async function () {
+            const { firstVoting } = await loadFixture(deployContracts);
+
+            const result = await firstVoting.getResultOfProposal(1);
+
+            expect(result[0]).to.be.eq(BigNumber.from(0));
+            expect(result[1]).to.be.eq(BigNumber.from(100000));
+            expect(result[2]).to.be.eq(BigNumber.from(2000));
         });
     });
 });

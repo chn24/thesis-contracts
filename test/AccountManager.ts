@@ -3,6 +3,11 @@ import { loadFixture } from "ethereum-waffle";
 import { BigNumber } from "ethers";
 import { AbiCoder, toUtf8Bytes } from "ethers/lib/utils";
 import { ethers } from "hardhat";
+import Web3 from "web3";
+
+const web3 = new Web3();
+const abi = new AbiCoder();
+const admin = "0x555BdfdBC34D551884AAca9225f92F7c7F7c3f45";
 
 describe("AccountManager", async function () {
     async function deployContracts() {
@@ -23,14 +28,15 @@ describe("AccountManager", async function () {
 
         await accountManager.setIsAdmin(votingManagerAddress, true);
 
+        const encodedTitle = abi.encode(["string"], ["Đại hội cổ đông 10/2024"]);
+        const time = (new Date().getTime() / (1000 * 86400)).toFixed();
+
         await votingManager.initialize(votingAddress, accountManagerAddress);
         await accountManager.setVotingManager(votingManagerAddress);
-        await votingManager.createVoting();
+        await votingManager.createVoting(encodedTitle, time);
         const firstVotingAddress = await votingManager.votings(1);
 
         const firstVoting = Voting.attach(firstVotingAddress);
-
-        const abi = new AbiCoder();
 
         const content1 = abi.encode(["string"], ["abc"]);
         const content2 = abi.encode(["string"], ["def"]);
@@ -46,21 +52,66 @@ describe("AccountManager", async function () {
         };
     }
 
-    describe("Verify", async function () {
-        it("Complete", async function () {
+    describe("initilize", async function () {
+        it("Fail: initilized", async function () {
             const { accountManager } = await loadFixture(deployContracts);
 
-            await accountManager.verifyBalance(10000);
+            await expect(accountManager.initialize("verify")).to.be.rejectedWith("Initialized");
+        });
+    });
+
+    describe("setVotingManager", async function () {
+        it("Fail: only owner", async function () {
+            const { accountManager, owner, otherAccounts } = await loadFixture(deployContracts);
+
+            await expect(accountManager.connect(otherAccounts[0]).setVotingManager(owner.address)).to.be.rejectedWith("Ownable: caller is not the owner");
+        });
+    });
+
+    describe("setIsValidSender", async function () {
+        it("Fail: only owner", async function () {
+            const { accountManager, owner, otherAccounts } = await loadFixture(deployContracts);
+
+            await expect(accountManager.connect(otherAccounts[0]).setIsValidSender(owner.address, true)).to.be.rejectedWith("Not admin");
+        });
+    });
+
+    describe("setIsAdmin", async function () {
+        it("Fail: only owner", async function () {
+            const { accountManager, owner, otherAccounts } = await loadFixture(deployContracts);
+
+            await expect(accountManager.connect(otherAccounts[0]).setIsAdmin(owner.address, true)).to.be.rejectedWith("Ownable: caller is not the owner");
+        });
+    });
+
+    describe("Verify", async function () {
+        it("Failed: invalid signature", async function () {
+            const { accountManager, owner } = await loadFixture(deployContracts);
+
+            const messageHash = await accountManager.getMessageHash(owner.address, 100000);
+            const signature = web3.eth.accounts.sign(messageHash, process.env.DEPLOYER_PRIVATE_KEY ?? "");
+            await expect(accountManager.verify(100000, signature.signature)).to.be.rejectedWith("Invalid signature");
+        });
+        it("Complete", async function () {
+            const { accountManager, owner } = await loadFixture(deployContracts);
+
+            await accountManager.setIsAdmin(admin, true);
+
+            const messageHash = await accountManager.getMessageHash(owner.address, 100000);
+            const signature = web3.eth.accounts.sign(messageHash, process.env.DEPLOYER_PRIVATE_KEY ?? "");
+            await accountManager.verify(100000, signature.signature);
 
             const curBalance = await accountManager.getCurrentBalance();
 
-            expect(curBalance).to.be.eq(BigNumber.from(10000));
+            expect(curBalance).to.be.eq(BigNumber.from(100000));
         });
 
         it("Verified", async function () {
-            const { accountManager } = await loadFixture(deployContracts);
+            const { accountManager, owner } = await loadFixture(deployContracts);
 
-            await expect(accountManager.verifyBalance(10000)).to.be.rejectedWith("You have verified");
+            const messageHash = await accountManager.getMessageHash(owner.address, 100000);
+            const signature = web3.eth.accounts.sign(messageHash, process.env.DEPLOYER_PRIVATE_KEY ?? "");
+            await expect(accountManager.verify(100000, signature.signature)).to.be.rejectedWith("You have verified");
         });
     });
 
@@ -69,17 +120,23 @@ describe("AccountManager", async function () {
             const { accountManager, otherAccounts } = await loadFixture(deployContracts);
 
             const user = otherAccounts[0];
-            await expect(accountManager.connect(user).delegate(user.address)).to.be.rejectedWith("You must veridy balance first");
+            await expect(accountManager.connect(user).delegate(user.address)).to.be.rejectedWith("You must verify balance first");
         });
 
         it("Fail: Delegated user haven't verified", async function () {
             const { accountManager, otherAccounts } = await loadFixture(deployContracts);
 
             const delegatedUser = otherAccounts[0];
+            const user = otherAccounts[1];
             await expect(accountManager.delegate(delegatedUser.address)).to.be.rejectedWith("User haven't verified balance yet");
 
-            await accountManager.connect(delegatedUser).verifyBalance(1000);
-            await accountManager.connect(otherAccounts[1]).verifyBalance(1000);
+            const messageHash1 = await accountManager.getMessageHash(delegatedUser.address, 1000);
+            const signature1 = web3.eth.accounts.sign(messageHash1, process.env.DEPLOYER_PRIVATE_KEY ?? "");
+            await accountManager.connect(delegatedUser).verify(1000, signature1.signature);
+
+            const messageHash2 = await accountManager.getMessageHash(user.address, 1000);
+            const signature2 = web3.eth.accounts.sign(messageHash2, process.env.DEPLOYER_PRIVATE_KEY ?? "");
+            await accountManager.connect(user).verify(1000, signature2.signature);
         });
 
         it("Complete", async function () {
@@ -115,7 +172,7 @@ describe("AccountManager", async function () {
             const { firstVoting, accountManager, otherAccounts } = await loadFixture(deployContracts);
 
             const delegatedUser = otherAccounts[1];
-            await firstVoting.setStatus(1);
+            await firstVoting.setStatus(2);
             await firstVoting.vote([
                 {
                     index: 1,
@@ -146,18 +203,6 @@ describe("AccountManager", async function () {
             ]);
 
             await expect(accountManager.delegate(delegatedUser.address)).to.be.rejectedWith("User had voted");
-        });
-    });
-
-    describe.only("Verify with signature", async function () {
-        it("", async function () {
-            const { accountManager } = await loadFixture(deployContracts);
-
-            const address = "0x555BdfdBC34D551884AAca9225f92F7c7F7c3f45";
-            const signature =
-                "0xb5add36295ca2088a392c66c0bbde4299611967e6b5d113abe966cae1bafbd3a3e25cdc49aaa75818fadc29c76c932e7839e00874d0291435e54da9e8b9254311c";
-
-            await accountManager.verify(address.toLowerCase(), 5000, signature);
         });
     });
 });
