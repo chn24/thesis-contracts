@@ -116,6 +116,11 @@ describe("AccountManager", async function () {
     });
 
     describe("Delegate", async function () {
+        it("Fail: Cannot delegate yourself", async function () {
+            const { accountManager, owner } = await loadFixture(deployContracts);
+            await expect(accountManager.delegate(owner.address)).to.be.rejectedWith("Cannot delegate yourself");
+        });
+
         it("Fail: User haven't verified", async function () {
             const { accountManager, otherAccounts } = await loadFixture(deployContracts);
 

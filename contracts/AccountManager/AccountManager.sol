@@ -50,6 +50,7 @@ contract AccountManager is IAccountManager, Ownable2Step {
         require(balances[user][currentRound] > 0, "User haven't verified balance yet");
         require(delegateInfos[user][currentRound].amount == 0, "User had delegated");
         require(delegateInfos[msg.sender][currentRound].amount == 0, "You had delegated");
+        require(user != msg.sender, "Cannot delegate yourself");
         balances[user][currentRound] += balances[msg.sender][currentRound];
         delegateInfos[msg.sender][currentRound] = DelegateInfo(user, balances[msg.sender][currentRound]);
     }
@@ -110,6 +111,8 @@ contract AccountManager is IAccountManager, Ownable2Step {
     }
 
     // function delegateVerify(address delegatedUser, uint128 amount, bytes memory signature) public {
+
+        // require(user != msg.sender, "Cannot delegate yourself");
     //     uint24 currentRound = votingManager.totalVoting();
     //     require(balances[delegatedUser][currentRound] > 0, "User haven't verified balance yet");
     //     require(delegateInfos[delegatedUser][currentRound].amount == 0, "User had delegated");

@@ -1,6 +1,6 @@
 {
-    "accountManager": "0x6B225cd8C57827488646255C5A2a538431554037",
-    "votingManager": "0xbF9f3DB09Fa05EC409FA6Cdcd75cd764C67A2956",
+    "accountManager": "0x1146330b031562Fc80d54989040477418607E107",
+    "votingManager": "0x5963c4230924E97D16c47E8971A19dcc3152Da81",
     "votingImplement": "0x959E3bC6c1750C37643353B919aAA6d4Ab38Bd6d",
     "firstVoting": ""
 }
