@@ -113,6 +113,60 @@ describe("Voting", async function () {
         });
     });
 
+    describe("Add Nomination", async function () {
+        it("Fail: Only owner can add", async function () {
+            const { otherAccounts, firstVoting } = await loadFixture(deployContracts);
+            const user = otherAccounts[0];
+
+            await expect(firstVoting.connect(user).addNomination([])).to.be.rejectedWith("Ownable: caller is not the owner");
+        });
+
+        it("Fail: empty", async function () {
+            const { firstVoting } = await loadFixture(deployContracts);
+            await expect(firstVoting.addNomination([])).to.be.rejectedWith("Empty");
+        });
+
+        it("Complete", async function () {
+            const { firstVoting } = await loadFixture(deployContracts);
+
+            const user1 = abi.encode(["string"], ["Nguyễn Văn A"]);
+            const user2 = abi.encode(["string"], ["Bùi Văn B"]);
+            const user3 = abi.encode(["string"], ["Hà Văn C"]);
+
+            await firstVoting.addNomination([user1, user2, user3]);
+            const nominations = await firstVoting.getAllNominations();
+            const nomination1 = nominations[1][0];
+            const nomination2 = nominations[1][1];
+            const nomination3 = nominations[1][2];
+            expect(nominations[0]).to.be.eq(3);
+            expect(nomination1.index).to.be.eq(1);
+            expect(abi.decode(["string"], nomination1.content)[0]).to.be.eq("Nguyễn Văn A");
+            expect(nomination2.index).to.be.eq(2);
+            expect(abi.decode(["string"], nomination2.content)[0]).to.be.eq("Bùi Văn B");
+            expect(nomination3.index).to.be.eq(3);
+            expect(abi.decode(["string"], nomination3.content)[0]).to.be.eq("Hà Văn C");
+        });
+    });
+
+    describe("setLimitNominationVoted", async function () {
+        it("Fail: Only owner can add", async function () {
+            const { firstVoting, otherAccounts } = await loadFixture(deployContracts);
+            const user = otherAccounts[0];
+
+            await expect(firstVoting.connect(user).setLimitNominationVoted(1)).to.be.rejectedWith("Ownable: caller is not the owner");
+        });
+
+        it("Complete", async function () {
+            const { firstVoting } = await loadFixture(deployContracts);
+
+            await firstVoting.setLimitNominationVoted(2);
+
+            const limit = await firstVoting.limitNominationVoted();
+
+            expect(limit).to.be.eq(2);
+        });
+    });
+
     describe("Set Status", async function () {
         it("Fail: only Owner", async function () {
             const { firstVoting, otherAccounts } = await loadFixture(deployContracts);
@@ -163,56 +217,102 @@ describe("Voting", async function () {
         });
     });
 
-    describe("Vote", async function () {
+    describe("Vote Proposal", async function () {
         it("Fail: Not YET", async function () {
             const { firstVoting } = await loadFixture(deployContracts);
 
-            await expect(firstVoting.vote([])).to.be.rejectedWith("Not open");
+            await expect(firstVoting.vote([], [])).to.be.rejectedWith("Not open");
         });
 
-        it("Fail: Invalid length (less than total)", async function () {
+        it("Fail: Invalid proposal length (less than total)", async function () {
             const { firstVoting } = await loadFixture(deployContracts);
 
             await firstVoting.setStatus(STATUS.OPEN);
 
-            await expect(firstVoting.vote([])).to.be.rejectedWith("Invalid length");
+            await expect(firstVoting.vote([], [])).to.be.rejectedWith("Invalid proposal length");
         });
 
-        it("Fail: Invalid length (more than total)", async function () {
+        it("Fail: Invalid proposal length (more than total)", async function () {
             const { firstVoting } = await loadFixture(deployContracts);
 
             await expect(
-                firstVoting.vote([
-                    {
-                        index: 1,
-                        option: 1,
-                    },
-                    {
-                        index: 1,
-                        option: 1,
-                    },
-                    {
-                        index: 1,
-                        option: 1,
-                    },
-                ]),
-            ).to.be.rejectedWith("Invalid length");
+                firstVoting.vote(
+                    [
+                        {
+                            index: 1,
+                            option: 1,
+                        },
+                        {
+                            index: 1,
+                            option: 1,
+                        },
+                        {
+                            index: 1,
+                            option: 1,
+                        },
+                    ],
+                    [],
+                ),
+            ).to.be.rejectedWith("Invalid proposal length");
+        });
+
+        it("Fail: Invalid nomination length (less than total)", async function () {
+            const { firstVoting } = await loadFixture(deployContracts);
+
+            await expect(
+                firstVoting.vote(
+                    [
+                        {
+                            index: 1,
+                            option: 1,
+                        },
+                        {
+                            index: 1,
+                            option: 1,
+                        },
+                    ],
+                    [],
+                ),
+            ).to.be.rejectedWith("Invalid nomination length");
+        });
+
+        it("Fail: Invalid nomination length (more than total)", async function () {
+            const { firstVoting } = await loadFixture(deployContracts);
+
+            await expect(
+                firstVoting.vote(
+                    [
+                        {
+                            index: 1,
+                            option: 1,
+                        },
+                        {
+                            index: 1,
+                            option: 1,
+                        },
+                    ],
+                    [1, 2, 3],
+                ),
+            ).to.be.rejectedWith("Invalid nomination length");
         });
 
         it("Fail: User cannot vote", async function () {
             const { firstVoting, accountManager, owner } = await loadFixture(deployContracts);
 
             await expect(
-                firstVoting.vote([
-                    {
-                        index: 1,
-                        option: 1,
-                    },
-                    {
-                        index: 2,
-                        option: 1,
-                    },
-                ]),
+                firstVoting.vote(
+                    [
+                        {
+                            index: 1,
+                            option: 1,
+                        },
+                        {
+                            index: 2,
+                            option: 1,
+                        },
+                    ],
+                    [1, 2],
+                ),
             ).to.be.rejectedWith("You can't vote");
 
             const messageHash = await accountManager.getMessageHash(owner.address, 100000);
@@ -220,37 +320,83 @@ describe("Voting", async function () {
             await accountManager.verify(100000, signature.signature);
         });
 
-        it("Fail: Invalid index", async function () {
+        it("Fail: Invalid proposal", async function () {
             const { firstVoting } = await loadFixture(deployContracts);
 
             await expect(
-                firstVoting.vote([
-                    {
-                        index: 5,
-                        option: 1,
-                    },
-                    {
-                        index: 1,
-                        option: 1,
-                    },
-                ]),
-            ).to.be.rejectedWith("Invalid index");
+                firstVoting.vote(
+                    [
+                        {
+                            index: 5,
+                            option: 1,
+                        },
+                        {
+                            index: 1,
+                            option: 1,
+                        },
+                    ],
+                    [1, 2],
+                ),
+            ).to.be.rejectedWith("Invalid proposal");
         });
 
-        it("Fail: Cannot vote twice (vote same)", async function () {
+        it("Fail: Cannot vote twice (vote same proposal)", async function () {
             const { firstVoting } = await loadFixture(deployContracts);
 
             await expect(
-                firstVoting.vote([
-                    {
-                        index: 1,
-                        option: 1,
-                    },
-                    {
-                        index: 1,
-                        option: 1,
-                    },
-                ]),
+                firstVoting.vote(
+                    [
+                        {
+                            index: 1,
+                            option: 1,
+                        },
+                        {
+                            index: 1,
+                            option: 1,
+                        },
+                    ],
+                    [1, 2],
+                ),
+            ).to.be.rejectedWith("Cannot vote twice");
+        });
+
+        it("Fail: Invalid nomination", async function () {
+            const { firstVoting } = await loadFixture(deployContracts);
+
+            await expect(
+                firstVoting.vote(
+                    [
+                        {
+                            index: 1,
+                            option: 1,
+                        },
+                        {
+                            index: 2,
+                            option: 0,
+                        },
+                    ],
+                    [4, 5],
+                ),
+            ).to.be.rejectedWith("Invalid nomination");
+        });
+
+        it("Fail: Cannot vote twice (vote same nomination)", async function () {
+            const { firstVoting } = await loadFixture(deployContracts);
+
+            await expect(
+                firstVoting.vote(
+                    [
+                        {
+                            index: 1,
+                            option: 1,
+                        },
+                        {
+                            index: 2,
+                            option: 0,
+                        },
+                    ],
+                    [1, 1],
+                ),
             ).to.be.rejectedWith("Cannot vote twice");
         });
 
@@ -260,16 +406,19 @@ describe("Voting", async function () {
             const index1Voted = (await firstVoting.proposals(1))[2];
             const index2Voted = (await firstVoting.proposals(2))[2];
 
-            await firstVoting.vote([
-                {
-                    index: 1,
-                    option: 1,
-                },
-                {
-                    index: 2,
-                    option: 0,
-                },
-            ]);
+            await firstVoting.vote(
+                [
+                    {
+                        index: 1,
+                        option: 1,
+                    },
+                    {
+                        index: 2,
+                        option: 0,
+                    },
+                ],
+                [1, 2],
+            );
 
             const index1VotedAfterVote = (await firstVoting.proposals(1))[2];
             const index2VotedAfterVote = (await firstVoting.proposals(2))[2];
@@ -279,29 +428,36 @@ describe("Voting", async function () {
             expect(BigNumber.from(index1Voted).add(100000)).to.be.eq(BigNumber.from(index1VotedAfterVote));
             expect(BigNumber.from(index2Voted).add(100000)).to.be.eq(BigNumber.from(index2VotedAfterVote));
 
-            expect(results[0].agree).to.be.eq(BigNumber.from(0));
-            expect(results[0].ignore).to.be.eq(BigNumber.from(100000));
-            expect(results[0].noComment).to.be.eq(BigNumber.from(0));
+            expect(results[0][0].agree).to.be.eq(BigNumber.from(0));
+            expect(results[0][0].ignore).to.be.eq(BigNumber.from(100000));
+            expect(results[0][0].noComment).to.be.eq(BigNumber.from(0));
 
-            expect(results[1].agree).to.be.eq(BigNumber.from(100000));
-            expect(results[1].ignore).to.be.eq(BigNumber.from(0));
-            expect(results[1].noComment).to.be.eq(BigNumber.from(0));
+            expect(results[0][1].agree).to.be.eq(BigNumber.from(100000));
+            expect(results[0][1].ignore).to.be.eq(BigNumber.from(0));
+            expect(results[0][1].noComment).to.be.eq(BigNumber.from(0));
+
+            expect(BigNumber.from(results[1][0].totalVote)).to.be.eq(BigNumber.from(100000));
+            expect(BigNumber.from(results[1][1].totalVote)).to.be.eq(BigNumber.from(100000));
+            expect(BigNumber.from(results[1][2].totalVote)).to.be.eq(BigNumber.from(0));
         });
 
         it("Fail: Voted", async function () {
             const { firstVoting } = await loadFixture(deployContracts);
 
             await expect(
-                firstVoting.vote([
-                    {
-                        index: 1,
-                        option: 1,
-                    },
-                    {
-                        index: 2,
-                        option: 0,
-                    },
-                ]),
+                firstVoting.vote(
+                    [
+                        {
+                            index: 1,
+                            option: 1,
+                        },
+                        {
+                            index: 2,
+                            option: 0,
+                        },
+                    ],
+                    [1, 2],
+                ),
             ).to.be.rejectedWith("Cannot vote twice");
         });
 
@@ -326,16 +482,19 @@ describe("Voting", async function () {
             const instance = firstVoting.connect(user);
 
             await expect(
-                instance.vote([
-                    {
-                        index: 1,
-                        option: 1,
-                    },
-                    {
-                        index: 2,
-                        option: 0,
-                    },
-                ]),
+                instance.vote(
+                    [
+                        {
+                            index: 1,
+                            option: 1,
+                        },
+                        {
+                            index: 2,
+                            option: 0,
+                        },
+                    ],
+                    [1, 2],
+                ),
             ).to.be.rejectedWith("You have delegated");
         });
 
@@ -347,16 +506,19 @@ describe("Voting", async function () {
             const index1Voted = (await firstVoting.proposals(1))[2];
             const index2Voted = (await firstVoting.proposals(2))[2];
 
-            await instance.vote([
-                {
-                    index: 1,
-                    option: 2,
-                },
-                {
-                    index: 2,
-                    option: 0,
-                },
-            ]);
+            await instance.vote(
+                [
+                    {
+                        index: 1,
+                        option: 2,
+                    },
+                    {
+                        index: 2,
+                        option: 0,
+                    },
+                ],
+                [1, 3],
+            );
 
             const index1VotedAfterVote = (await firstVoting.proposals(1))[2];
             const index2VotedAfterVote = (await firstVoting.proposals(2))[2];
@@ -366,17 +528,21 @@ describe("Voting", async function () {
             expect(BigNumber.from(index1Voted).add(2000)).to.be.eq(BigNumber.from(index1VotedAfterVote));
             expect(BigNumber.from(index2Voted).add(2000)).to.be.eq(BigNumber.from(index2VotedAfterVote));
 
-            expect(results[0].agree).to.be.eq(BigNumber.from(0));
-            expect(results[0].ignore).to.be.eq(BigNumber.from(100000));
-            expect(results[0].noComment).to.be.eq(BigNumber.from(2000));
+            expect(results[0][0].agree).to.be.eq(BigNumber.from(0));
+            expect(results[0][0].ignore).to.be.eq(BigNumber.from(100000));
+            expect(results[0][0].noComment).to.be.eq(BigNumber.from(2000));
 
-            expect(results[1].agree).to.be.eq(BigNumber.from(102000));
-            expect(results[1].ignore).to.be.eq(BigNumber.from(0));
-            expect(results[1].noComment).to.be.eq(BigNumber.from(0));
+            expect(results[0][1].agree).to.be.eq(BigNumber.from(102000));
+            expect(results[0][1].ignore).to.be.eq(BigNumber.from(0));
+            expect(results[0][1].noComment).to.be.eq(BigNumber.from(0));
+
+            expect(BigNumber.from(results[1][0].totalVote)).to.be.eq(BigNumber.from(102000));
+            expect(BigNumber.from(results[1][1].totalVote)).to.be.eq(BigNumber.from(100000));
+            expect(BigNumber.from(results[1][2].totalVote)).to.be.eq(BigNumber.from(2000));
         });
     });
 
-    describe("get result uinque index", async function () {
+    describe("get result uinque proposal index", async function () {
         it("Fail: Invalid index", async function () {
             const { firstVoting } = await loadFixture(deployContracts);
 
@@ -391,6 +557,21 @@ describe("Voting", async function () {
             expect(result[0]).to.be.eq(BigNumber.from(0));
             expect(result[1]).to.be.eq(BigNumber.from(100000));
             expect(result[2]).to.be.eq(BigNumber.from(2000));
+        });
+    });
+
+    describe("get result of unique nomination index", async function () {
+        it("Fail: Invalid index", async function () {
+            const { firstVoting } = await loadFixture(deployContracts);
+
+            await expect(firstVoting.getResultOfNomination(10)).to.be.rejectedWith("Invalid index");
+        });
+
+        it("Complete", async function () {
+            const { firstVoting } = await loadFixture(deployContracts);
+
+            const result = await firstVoting.getResultOfNomination(1);
+            expect(result[2]).to.be.eq(BigNumber.from(102000));
         });
     });
 });

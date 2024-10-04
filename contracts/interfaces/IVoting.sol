@@ -30,10 +30,21 @@ interface IVoting {
         OPTION option;
     }
 
+    struct Nomination {
+        uint16 index;
+        bytes content;
+    }
+
     struct Result {
         uint agree;
         uint ignore;
         uint noComment;
+    }
+
+    struct NominationResult {
+        uint16 index;
+        bytes content;
+        uint128 totalVote;
     }
 
     function initialize(address _owner, IAccountManager _accountManager) external;

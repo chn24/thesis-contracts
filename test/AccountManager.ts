@@ -178,16 +178,19 @@ describe("AccountManager", async function () {
 
             const delegatedUser = otherAccounts[1];
             await firstVoting.setStatus(2);
-            await firstVoting.vote([
-                {
-                    index: 1,
-                    option: 1,
-                },
-                {
-                    index: 2,
-                    option: 0,
-                },
-            ]);
+            await firstVoting.vote(
+                [
+                    {
+                        index: 1,
+                        option: 1,
+                    },
+                    {
+                        index: 2,
+                        option: 0,
+                    },
+                ],
+                [],
+            );
 
             await expect(accountManager.delegate(delegatedUser.address)).to.be.rejectedWith("You had voted");
         });
@@ -196,16 +199,19 @@ describe("AccountManager", async function () {
             const { firstVoting, accountManager, otherAccounts } = await loadFixture(deployContracts);
 
             const delegatedUser = otherAccounts[1];
-            await firstVoting.connect(delegatedUser).vote([
-                {
-                    index: 1,
-                    option: 1,
-                },
-                {
-                    index: 2,
-                    option: 0,
-                },
-            ]);
+            await firstVoting.connect(delegatedUser).vote(
+                [
+                    {
+                        index: 1,
+                        option: 1,
+                    },
+                    {
+                        index: 2,
+                        option: 0,
+                    },
+                ],
+                [],
+            );
 
             await expect(accountManager.delegate(delegatedUser.address)).to.be.rejectedWith("User had voted");
         });

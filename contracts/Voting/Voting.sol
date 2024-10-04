@@ -2,6 +2,7 @@
 
 pragma solidity ^0.8.19;
 
+import "hardhat/console.sol";
 import "../utils/Ownable2Step.sol";
 import "../interfaces/IVoting.sol";
 import "../interfaces/IAccountManager.sol";
@@ -10,11 +11,16 @@ contract Voting is Ownable2Step, IVoting {
     bool private initialized;
     STATUS public status;
     uint16 public totalProposal;
+    uint16 public totalNomination;
+    uint16 public limitNominationVoted;
     IAccountManager public accountManager;
 
     mapping(uint16 => Proposal) public proposals;
     mapping(bytes => bool) public validProposal;
-    mapping(uint16 => mapping(address => bool)) public isVoted;
+    mapping(uint16 => mapping(address => bool)) public isProposalVoted;
+    mapping(uint16 => mapping(address => bool)) public isNominationVoted;
+    mapping(uint16 => bytes) public nominations;
+    mapping(uint16 => uint128) public nominationVoteCount;
 
     event AddProposal(bytes[] contents, bool[] isImportants, uint16 startIndex, uint16 totalProposal);
 
@@ -27,6 +33,10 @@ contract Voting is Ownable2Step, IVoting {
 
     function setStatus(STATUS _status) public onlyOwner {
         status = _status;
+    }
+
+    function setLimitNominationVoted(uint16 _limitNominationVoted) public onlyOwner {
+        limitNominationVoted = _limitNominationVoted;
     }
 
     function addProposal(bytes[] calldata contents, bool[] calldata isImportants) public onlyOwner {
@@ -44,17 +54,35 @@ contract Voting is Ownable2Step, IVoting {
         emit AddProposal(contents, isImportants, totalProposal - uint16(length), totalProposal);
     }
 
-    function vote(Answer[] calldata answers) public {
+    function addNomination(bytes[] memory listNomination) public onlyOwner {
+        require(listNomination.length != 0, "Empty");
+        uint256 length = listNomination.length;
+        for (uint index = 0; index < length; index++) {
+            nominations[totalNomination + uint16(index) + 1] = listNomination[index];
+        }
+        totalNomination = totalNomination + uint16(length);
+    }
+
+    function vote(Answer[] calldata answers, uint16[] calldata nominationIndexs) public {
         require(status == STATUS.OPEN, "Not open");
-        require(uint16(answers.length) == totalProposal, "Invalid length");
+        require(uint16(answers.length) == totalProposal, "Invalid proposal length");
+        require(uint16(nominationIndexs.length) == limitNominationVoted, "Invalid nomination length");
         uint128 balance = accountManager.verifyValidAccount(msg.sender);
 
         for (uint256 i = 0; i < answers.length; i++) {
-            require(answers[i].index > 0 && answers[i].index <= totalProposal, "Invalid index");
-            require(!isVoted[answers[i].index][msg.sender], "Cannot vote twice");
+            require(answers[i].index > 0 && answers[i].index <= totalProposal, "Invalid proposal");
+            require(!isProposalVoted[answers[i].index][msg.sender], "Cannot vote twice");
             proposals[answers[i].index].options[answers[i].option] += balance;
             proposals[answers[i].index].totalVote = proposals[answers[i].index].totalVote + balance;
-            isVoted[answers[i].index][msg.sender] = true;
+            isProposalVoted[answers[i].index][msg.sender] = true;
+        }
+
+        for (uint index = 0; index < limitNominationVoted; index++) {
+            require(nominationIndexs[index] > 0 && nominationIndexs[index] <= totalNomination, "Invalid nomination");
+            require(!isNominationVoted[nominationIndexs[index]][msg.sender], "Cannot vote twice");
+
+            nominationVoteCount[nominationIndexs[index]] += balance;
+            isNominationVoted[nominationIndexs[index]][msg.sender] = true;
         }
     }
 
@@ -64,20 +92,42 @@ contract Voting is Ownable2Step, IVoting {
         return (proposals[index].options[OPTION.AGREE], proposals[index].options[OPTION.IGNORE], proposals[index].options[OPTION.NO_COMMENT]);
     }
 
-    function getAllResults() public view returns (Result[] memory) {
+    function getResultOfNomination(uint16 index) public view returns (bytes memory, uint16, uint128) {
+        require(index > 0 && index <= totalNomination, "Invalid index");
+
+        return (nominations[index], index, nominationVoteCount[index]);
+    }
+
+    function getAllResults() public view returns (Result[] memory, NominationResult[] memory) {
         Result[] memory results = new Result[](totalProposal);
 
         for (uint16 i = 0; i < totalProposal; i++) {
             (results[i].agree, results[i].ignore, results[i].noComment) = getResultOfProposal(i + 1);
         }
 
-        return results;
+        NominationResult[] memory nominationResults = new NominationResult[](totalNomination);
+        for(uint16 index = 0; index < totalNomination; index ++) {
+            (nominationResults[index].content, nominationResults[index].index, nominationResults[index].totalVote) = getResultOfNomination(index + 1);
+        }
+
+        return (results, nominationResults);
     }
 
     function checkUserVoted(address _user) public view returns (bool) {
-        if (status == STATUS.NOT_YET || !isVoted[1][_user]) {
+        if (status == STATUS.NOT_YET || !isProposalVoted[1][_user]) {
             return false;
         }
         return true;
+    }
+
+    function getAllNominations() public view returns (uint16, Nomination[] memory) {
+        Nomination[] memory listNomination = new Nomination[](totalNomination);
+        uint16 len = 0;
+        for(uint16 index = 0; index < totalNomination; index ++) {
+            listNomination[len] = Nomination(index + 1, nominations[index + 1]);
+            len += 1;
+        }
+
+        return (totalNomination, listNomination);
     }
 }
