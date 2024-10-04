@@ -92,6 +92,12 @@ describe("Voting", async function () {
             await expect(firstVoting.addProposal([], [])).to.be.rejectedWith("Empty");
         });
 
+        it("Fail: add emty", async function () {
+            const { firstVoting } = await loadFixture(deployContracts);
+            const content = abi.encode(["string"], [""]);
+            await expect(firstVoting.addProposal([content], [true])).rejectedWith("Empty content");
+        });
+
         it("Complete", async function () {
             const { firstVoting } = await loadFixture(deployContracts);
 
@@ -124,6 +130,12 @@ describe("Voting", async function () {
         it("Fail: empty", async function () {
             const { firstVoting } = await loadFixture(deployContracts);
             await expect(firstVoting.addNomination([])).to.be.rejectedWith("Empty");
+        });
+
+        it("Fail: add emty", async function () {
+            const { firstVoting } = await loadFixture(deployContracts);
+            const user1 = abi.encode(["string"], [""]);
+            await expect(firstVoting.addNomination([user1])).rejectedWith("Empty content");
         });
 
         it("Complete", async function () {

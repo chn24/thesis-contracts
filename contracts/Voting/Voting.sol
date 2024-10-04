@@ -39,11 +39,27 @@ contract Voting is Ownable2Step, IVoting {
         limitNominationVoted = _limitNominationVoted;
     }
 
+    function checkBytesEmpty(bytes memory data) public pure {
+        if(data.length == 64) {
+
+        bytes memory empty = abi.encode("");
+        uint total = 0;
+        for(uint i = 0; i < data.length; i++) {
+            if(data[i] == empty[i]) {
+                total += 1;
+            }
+        }
+
+        require(total < empty.length, "Empty content");
+        }
+    }
+
     function addProposal(bytes[] calldata contents, bool[] calldata isImportants) public onlyOwner {
         require(contents.length == isImportants.length, "Invalid array length");
         require(contents.length != 0, "Empty");
         uint256 length = contents.length;
         for (uint16 i = 0; i < length; i++) {
+            checkBytesEmpty(contents[i]);
             Proposal storage _proposal = proposals[totalProposal + i + 1];
             _proposal.content = contents[i];
             _proposal.isImportant = isImportants[i];
@@ -58,6 +74,7 @@ contract Voting is Ownable2Step, IVoting {
         require(listNomination.length != 0, "Empty");
         uint256 length = listNomination.length;
         for (uint index = 0; index < length; index++) {
+            checkBytesEmpty(listNomination[index]);
             nominations[totalNomination + uint16(index) + 1] = listNomination[index];
         }
         totalNomination = totalNomination + uint16(length);
@@ -128,6 +145,6 @@ contract Voting is Ownable2Step, IVoting {
             len += 1;
         }
 
-        return (totalNomination, listNomination);
+        return (limitNominationVoted, listNomination);
     }
 }
