@@ -22,7 +22,7 @@ interface IVoting {
         bytes content;
         bool isImportant;
         uint128 totalVote;
-        mapping(OPTION => uint128) options;
+        uint128 agreeCount;
     }
 
     struct Answer {
@@ -37,8 +37,7 @@ interface IVoting {
 
     struct Result {
         uint agree;
-        uint ignore;
-        uint noComment;
+        uint totalVote;
     }
 
     struct NominationResult {

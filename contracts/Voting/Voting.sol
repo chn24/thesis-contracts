@@ -89,8 +89,13 @@ contract Voting is Ownable2Step, IVoting {
         for (uint256 i = 0; i < answers.length; i++) {
             require(answers[i].index > 0 && answers[i].index <= totalProposal, "Invalid proposal");
             require(!isProposalVoted[answers[i].index][msg.sender], "Cannot vote twice");
-            proposals[answers[i].index].options[answers[i].option] += balance;
-            proposals[answers[i].index].totalVote = proposals[answers[i].index].totalVote + balance;
+            if(answers[i].option != OPTION.NO_COMMENT) {
+                proposals[answers[i].index].totalVote = proposals[answers[i].index].totalVote + balance;
+                if (answers[i].option == OPTION.AGREE) {
+                proposals[answers[i].index].agreeCount = proposals[answers[i].index].agreeCount + balance;
+
+                }
+            }
             isProposalVoted[answers[i].index][msg.sender] = true;
         }
 
@@ -103,10 +108,10 @@ contract Voting is Ownable2Step, IVoting {
         }
     }
 
-    function getResultOfProposal(uint16 index) public view returns (uint, uint, uint) {
+    function getResultOfProposal(uint16 index) public view returns (uint, uint) {
         require(index > 0 && index <= totalProposal, "Invalid index");
 
-        return (proposals[index].options[OPTION.AGREE], proposals[index].options[OPTION.IGNORE], proposals[index].options[OPTION.NO_COMMENT]);
+        return (proposals[index].agreeCount, proposals[index].totalVote);
     }
 
     function getResultOfNomination(uint16 index) public view returns (bytes memory, uint16, uint128) {
@@ -119,7 +124,7 @@ contract Voting is Ownable2Step, IVoting {
         Result[] memory results = new Result[](totalProposal);
 
         for (uint16 i = 0; i < totalProposal; i++) {
-            (results[i].agree, results[i].ignore, results[i].noComment) = getResultOfProposal(i + 1);
+            (results[i].agree, results[i].totalVote) = getResultOfProposal(i + 1);
         }
 
         NominationResult[] memory nominationResults = new NominationResult[](totalNomination);

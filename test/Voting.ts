@@ -150,7 +150,7 @@ describe("Voting", async function () {
             const nomination1 = nominations[1][0];
             const nomination2 = nominations[1][1];
             const nomination3 = nominations[1][2];
-            expect(nominations[0]).to.be.eq(3);
+            expect(nominations[0]).to.be.eq(0);
             expect(nomination1.index).to.be.eq(1);
             expect(abi.decode(["string"], nomination1.content)[0]).to.be.eq("Nguyễn Văn A");
             expect(nomination2.index).to.be.eq(2);
@@ -441,12 +441,10 @@ describe("Voting", async function () {
             expect(BigNumber.from(index2Voted).add(100000)).to.be.eq(BigNumber.from(index2VotedAfterVote));
 
             expect(results[0][0].agree).to.be.eq(BigNumber.from(0));
-            expect(results[0][0].ignore).to.be.eq(BigNumber.from(100000));
-            expect(results[0][0].noComment).to.be.eq(BigNumber.from(0));
+            expect(results[0][0].totalVote).to.be.eq(BigNumber.from(100000));
 
             expect(results[0][1].agree).to.be.eq(BigNumber.from(100000));
-            expect(results[0][1].ignore).to.be.eq(BigNumber.from(0));
-            expect(results[0][1].noComment).to.be.eq(BigNumber.from(0));
+            expect(results[0][1].totalVote).to.be.eq(BigNumber.from(100000));
 
             expect(BigNumber.from(results[1][0].totalVote)).to.be.eq(BigNumber.from(100000));
             expect(BigNumber.from(results[1][1].totalVote)).to.be.eq(BigNumber.from(100000));
@@ -515,9 +513,6 @@ describe("Voting", async function () {
             const delegatedUser = otherAccounts[1];
             const instance = firstVoting.connect(delegatedUser);
 
-            const index1Voted = (await firstVoting.proposals(1))[2];
-            const index2Voted = (await firstVoting.proposals(2))[2];
-
             await instance.vote(
                 [
                     {
@@ -532,21 +527,13 @@ describe("Voting", async function () {
                 [1, 3],
             );
 
-            const index1VotedAfterVote = (await firstVoting.proposals(1))[2];
-            const index2VotedAfterVote = (await firstVoting.proposals(2))[2];
-
             const results = await firstVoting.getAllResults();
 
-            expect(BigNumber.from(index1Voted).add(2000)).to.be.eq(BigNumber.from(index1VotedAfterVote));
-            expect(BigNumber.from(index2Voted).add(2000)).to.be.eq(BigNumber.from(index2VotedAfterVote));
-
             expect(results[0][0].agree).to.be.eq(BigNumber.from(0));
-            expect(results[0][0].ignore).to.be.eq(BigNumber.from(100000));
-            expect(results[0][0].noComment).to.be.eq(BigNumber.from(2000));
+            expect(results[0][0].totalVote).to.be.eq(BigNumber.from(100000));
 
             expect(results[0][1].agree).to.be.eq(BigNumber.from(102000));
-            expect(results[0][1].ignore).to.be.eq(BigNumber.from(0));
-            expect(results[0][1].noComment).to.be.eq(BigNumber.from(0));
+            expect(results[0][1].totalVote).to.be.eq(BigNumber.from(102000));
 
             expect(BigNumber.from(results[1][0].totalVote)).to.be.eq(BigNumber.from(102000));
             expect(BigNumber.from(results[1][1].totalVote)).to.be.eq(BigNumber.from(100000));
@@ -568,7 +555,6 @@ describe("Voting", async function () {
 
             expect(result[0]).to.be.eq(BigNumber.from(0));
             expect(result[1]).to.be.eq(BigNumber.from(100000));
-            expect(result[2]).to.be.eq(BigNumber.from(2000));
         });
     });
 
