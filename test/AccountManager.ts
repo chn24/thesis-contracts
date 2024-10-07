@@ -1,13 +1,16 @@
 import { expect } from "chai";
 import { loadFixture } from "ethereum-waffle";
 import { BigNumber } from "ethers";
-import { AbiCoder, toUtf8Bytes } from "ethers/lib/utils";
+import { AbiCoder, keccak256, toUtf8Bytes } from "ethers/lib/utils";
 import { ethers } from "hardhat";
 import Web3 from "web3";
 
 const web3 = new Web3();
 const abi = new AbiCoder();
 const admin = "0x555BdfdBC34D551884AAca9225f92F7c7F7c3f45";
+const email = "user1@gmail.com";
+const email2 = "user2@gamil.com";
+const email3 = "user3@gmail.com";
 
 describe("AccountManager", async function () {
     async function deployContracts() {
@@ -34,7 +37,7 @@ describe("AccountManager", async function () {
         await votingManager.initialize(votingAddress, accountManagerAddress);
         await accountManager.setVotingManager(votingManagerAddress);
         await votingManager.createVoting(encodedTitle, time);
-        const firstVotingAddress = await votingManager.votings(1);
+        const firstVotingAddress = (await votingManager.votings(1)).contractAddress;
 
         const firstVoting = Voting.attach(firstVotingAddress);
 
@@ -87,31 +90,47 @@ describe("AccountManager", async function () {
     describe("Verify", async function () {
         it("Failed: invalid signature", async function () {
             const { accountManager, owner } = await loadFixture(deployContracts);
+            const emailEncoded = abi.encode(["string"], [email]);
+            const hashEmail = keccak256(emailEncoded);
 
-            const messageHash = await accountManager.getMessageHash(owner.address, 100000);
+            const messageHash = await accountManager.getMessageHash(owner.address, 100000, hashEmail);
             const signature = web3.eth.accounts.sign(messageHash, process.env.DEPLOYER_PRIVATE_KEY ?? "");
-            await expect(accountManager.verify(100000, signature.signature)).to.be.rejectedWith("Invalid signature");
+            await expect(accountManager.verify(100000, signature.signature, hashEmail)).to.be.rejectedWith("Invalid signature");
         });
         it("Complete", async function () {
             const { accountManager, owner } = await loadFixture(deployContracts);
 
             await accountManager.setIsAdmin(admin, true);
+            const emailEncoded = abi.encode(["string"], [email]);
+            const hashEmail = keccak256(emailEncoded);
 
-            const messageHash = await accountManager.getMessageHash(owner.address, 100000);
+            const messageHash = await accountManager.getMessageHash(owner.address, 100000, hashEmail);
             const signature = web3.eth.accounts.sign(messageHash, process.env.DEPLOYER_PRIVATE_KEY ?? "");
-            await accountManager.verify(100000, signature.signature);
+            await accountManager.verify(100000, signature.signature, hashEmail);
 
             const curBalance = await accountManager.getCurrentBalance();
 
             expect(curBalance).to.be.eq(BigNumber.from(100000));
         });
 
-        it("Verified", async function () {
+        it("Email verified", async function () {
             const { accountManager, owner } = await loadFixture(deployContracts);
+            const emailEncoded = abi.encode(["string"], [email]);
+            const hashEmail = keccak256(emailEncoded);
 
-            const messageHash = await accountManager.getMessageHash(owner.address, 100000);
+            const messageHash = await accountManager.getMessageHash(owner.address, 100000, hashEmail);
             const signature = web3.eth.accounts.sign(messageHash, process.env.DEPLOYER_PRIVATE_KEY ?? "");
-            await expect(accountManager.verify(100000, signature.signature)).to.be.rejectedWith("You have verified");
+            await expect(accountManager.verify(100000, signature.signature, hashEmail)).to.be.rejectedWith("Email verified");
+        });
+
+        it("Address verified", async function () {
+            const { accountManager, owner } = await loadFixture(deployContracts);
+            const emailEncoded = abi.encode(["string"], [email2]);
+            const hashEmail = keccak256(emailEncoded);
+
+            const messageHash = await accountManager.getMessageHash(owner.address, 100000, hashEmail);
+            const signature = web3.eth.accounts.sign(messageHash, process.env.DEPLOYER_PRIVATE_KEY ?? "");
+            await expect(accountManager.verify(100000, signature.signature, hashEmail)).to.be.rejectedWith("Address verified");
         });
     });
 
@@ -134,14 +153,18 @@ describe("AccountManager", async function () {
             const delegatedUser = otherAccounts[0];
             const user = otherAccounts[1];
             await expect(accountManager.delegate(delegatedUser.address)).to.be.rejectedWith("User haven't verified balance yet");
+            const emailEncoded1 = abi.encode(["string"], [email2]);
+            const hashEmail1 = keccak256(emailEncoded1);
+            const emailEncoded2 = abi.encode(["string"], [email3]);
+            const hashEmail2 = keccak256(emailEncoded2);
 
-            const messageHash1 = await accountManager.getMessageHash(delegatedUser.address, 1000);
+            const messageHash1 = await accountManager.getMessageHash(delegatedUser.address, 1000, hashEmail1);
             const signature1 = web3.eth.accounts.sign(messageHash1, process.env.DEPLOYER_PRIVATE_KEY ?? "");
-            await accountManager.connect(delegatedUser).verify(1000, signature1.signature);
+            await accountManager.connect(delegatedUser).verify(1000, signature1.signature, hashEmail1);
 
-            const messageHash2 = await accountManager.getMessageHash(user.address, 1000);
+            const messageHash2 = await accountManager.getMessageHash(user.address, 1000, hashEmail2);
             const signature2 = web3.eth.accounts.sign(messageHash2, process.env.DEPLOYER_PRIVATE_KEY ?? "");
-            await accountManager.connect(user).verify(1000, signature2.signature);
+            await accountManager.connect(user).verify(1000, signature2.signature, hashEmail2);
         });
 
         it("Complete", async function () {

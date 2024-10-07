@@ -14,7 +14,7 @@ enum STATUS {
     CLOSED,
 }
 
-describe("Voting", async function () {
+describe("VotingManager", async function () {
     async function deployContracts() {
         const [owner, ...otherAccounts] = await ethers.getSigners();
         const admin = "0x555BdfdBC34D551884AAca9225f92F7c7F7c3f45";
@@ -35,20 +35,13 @@ describe("Voting", async function () {
 
         await accountManager.setIsAdmin(votingManagerAddress, true);
 
-        const titleEncoded = abi.encode(["string"], ["Đại hội cổ đông thường niên 10/2024"]);
-        const time = (new Date().getTime() / (1000 * 86400)).toFixed();
-
         await votingManager.initialize(votingAddress, accountManagerAddress);
         await accountManager.setVotingManager(votingManagerAddress);
-        await votingManager.createVoting(titleEncoded, time);
-        const firstVotingAddress = await votingManager.votings(1);
-
-        const firstVoting = Voting.attach(firstVotingAddress);
 
         return {
             owner,
             otherAccounts,
-            firstVoting,
+
             accountManager,
             accountManagerAddress,
             votingManager,
@@ -121,7 +114,14 @@ describe("Voting", async function () {
             const titleEncoded = abi.encode(["string"], ["Đại hội cổ đông thường niên 10/2024"]);
             const time = (new Date().getTime() / (1000 * 86400)).toFixed();
 
-            await expect(votingManager.createVoting(titleEncoded, time)).to.be.emit(votingManager, "NewVoting");
+            await votingManager.createVoting(titleEncoded, time);
+
+            const votings = await votingManager.getAllVoting();
+
+            expect(abi.decode(["string"], votings[0].title)[0]).to.be.eq("Đại hội cổ đông thường niên 10/2024");
+            expect(votings[0].date).to.be.eq(Number(time));
+            expect(votings[0].index).to.be.eq(1);
+            // expect(votings[0].contractAddress).to.be.eq()
         });
     });
 });

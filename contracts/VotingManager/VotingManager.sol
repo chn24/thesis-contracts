@@ -15,7 +15,7 @@ contract VotingManager is IVotingManager, Ownable2Step {
 
     uint24 public totalVoting;
 
-    mapping(uint24 => address) public votings;
+    mapping(uint24 => Voting) public votings;
 
     event NewVoting(uint24 indexed index, uint24 startTime, address voting, bytes title);
 
@@ -32,7 +32,7 @@ contract VotingManager is IVotingManager, Ownable2Step {
         bytes32 _salt = keccak256(abi.encodePacked(totalVoting, block.timestamp));
         address voting = address(new ProxyAdmin{ salt: _salt }(implement, _owner));
         IVoting(voting).initialize(_owner, accountManager);
-        votings[totalVoting] = voting;
+        votings[totalVoting] = Voting(startTime, totalVoting, voting, title);
         accountManager.setIsValidSender(voting, true);
 
         emit NewVoting(totalVoting, startTime, voting, title);
@@ -49,8 +49,16 @@ contract VotingManager is IVotingManager, Ownable2Step {
     }
 
     function handleDelegate(address _user, address delegater) public view returns (uint24) {
-        require(!IVoting(votings[totalVoting]).checkUserVoted(_user), "User had voted");
-        require(!IVoting(votings[totalVoting]).checkUserVoted(delegater), "You had voted");
+        require(!IVoting(votings[totalVoting].contractAddress).checkUserVoted(_user), "User had voted");
+        require(!IVoting(votings[totalVoting].contractAddress).checkUserVoted(delegater), "You had voted");
         return totalVoting;
+    }
+
+    function getAllVoting() public view returns(Voting[] memory) {
+        Voting[] memory listVoting = new Voting[](totalVoting);
+        for(uint16 index = 0; index < totalVoting; index ++) {
+            listVoting[index] = votings[index + 1];
+        }
+        return listVoting;
     }
 }

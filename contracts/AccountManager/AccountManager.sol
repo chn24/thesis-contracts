@@ -19,6 +19,8 @@ contract AccountManager is IAccountManager, Ownable2Step {
 
     mapping(address => mapping(uint24 => DelegateInfo)) private delegateInfos;
 
+    mapping(bytes32 => mapping(uint24 => bool)) public emailVerified;
+
     modifier onlyAdmin() {
         require(isAdmin[msg.sender], "Not admin");
         _;
@@ -68,8 +70,8 @@ contract AccountManager is IAccountManager, Ownable2Step {
         return balances[user][currentRound];
     }
 
-    function getMessageHash(address user, uint128 amount) public view returns (bytes32) {
-        return keccak256(abi.encodePacked(message, user, amount));
+    function getMessageHash(address user, uint128 amount, bytes32 email) public view returns (bytes32) {
+        return keccak256(abi.encodePacked(message, user, amount, email));
     }
 
     function getEthSignedMessageHash(bytes32 _messageHash) public pure returns (bytes32) {
@@ -97,17 +99,19 @@ contract AccountManager is IAccountManager, Ownable2Step {
         // implicitly return (r, s, v)
     }
 
-    function verify(uint128 amount, bytes memory signature) public {
-        bytes32 messageHash = getMessageHash(msg.sender, amount);
+    function verify(uint128 amount, bytes memory signature, bytes32 email) public {
+        uint24 currentRound = votingManager.totalVoting();
+        require(!emailVerified[email][currentRound], "Email verified");
+        bytes32 messageHash = getMessageHash(msg.sender, amount, email);
         bytes32 ethSignedMessageHash = getEthSignedMessageHash(messageHash);
 
         address signer = recoverSigner(ethSignedMessageHash, signature);
 
         require(isAdmin[signer], "Invalid signature");
-        uint24 currentRound = votingManager.totalVoting();
-        require(balances[msg.sender][currentRound] == 0, "You have verified");
+        require(balances[msg.sender][currentRound] == 0, "Address verified");
 
         balances[msg.sender][currentRound] = amount;
+        emailVerified[email][currentRound] = true;
     }
 
     // function delegateVerify(address delegatedUser, uint128 amount, bytes memory signature) public {

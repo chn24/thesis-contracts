@@ -60,10 +60,7 @@ contract Voting is Ownable2Step, IVoting {
         uint256 length = contents.length;
         for (uint16 i = 0; i < length; i++) {
             checkBytesEmpty(contents[i]);
-            Proposal storage _proposal = proposals[totalProposal + i + 1];
-            _proposal.content = contents[i];
-            _proposal.isImportant = isImportants[i];
-            _proposal.totalVote = 0;
+            proposals[totalProposal + i + 1] = Proposal(contents[i], isImportants[i], 0, 0);
         }
         totalProposal += uint16(length);
 
@@ -78,6 +75,33 @@ contract Voting is Ownable2Step, IVoting {
             nominations[totalNomination + uint16(index) + 1] = listNomination[index];
         }
         totalNomination = totalNomination + uint16(length);
+    }
+
+    function updateProposals(bytes[] calldata contents, uint16[] calldata proposalIdxs) public onlyOwner {
+        require(status == STATUS.NOT_YET || status == STATUS.PAUSED, "Started");
+        require(contents.length == proposalIdxs.length, "Invalid array length");
+        require(contents.length != 0, "Empty");
+
+        uint256 len = proposalIdxs.length;
+        for(uint256 index = 0; index < len; index++) {
+            uint16 proposalIdx = proposalIdxs[index];
+            require(proposalIdx < totalProposal, "Invalid index");
+            proposals[proposalIdx].content = contents[index];
+        }
+    }
+
+    function updateNominations(bytes[] memory listNomination, uint16[] calldata nominationIdxs) public onlyOwner {
+        require(status == STATUS.NOT_YET || status == STATUS.PAUSED, "Started");
+        require(listNomination.length == nominationIdxs.length, "Invalid array length");
+        require(listNomination.length != 0, "Empty");
+
+        uint256 len = nominationIdxs.length;
+        for(uint256 index = 0; index < len; index++) {
+            uint16 nominationIdx = nominationIdxs[index];
+            require(nominationIdx < totalNomination, "Invalid index");
+            nominations[nominationIdx] = listNomination[index];
+        }
+
     }
 
     function vote(Answer[] calldata answers, uint16[] calldata nominationIndexs) public {
@@ -144,12 +168,18 @@ contract Voting is Ownable2Step, IVoting {
 
     function getAllNominations() public view returns (uint16, Nomination[] memory) {
         Nomination[] memory listNomination = new Nomination[](totalNomination);
-        uint16 len = 0;
         for(uint16 index = 0; index < totalNomination; index ++) {
-            listNomination[len] = Nomination(index + 1, nominations[index + 1]);
-            len += 1;
+            listNomination[index] = Nomination(index + 1, nominations[index + 1]);
         }
 
         return (limitNominationVoted, listNomination);
+    }
+
+    function getAllProposals() public view returns(Proposal[] memory) {
+        Proposal[] memory listProposal = new Proposal[](totalProposal);
+        for(uint16 index = 0; index < totalProposal; index ++) {
+            listProposal[index] = proposals[index + 1];
+        }
+        return listProposal;
     }
 }

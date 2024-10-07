@@ -1,12 +1,15 @@
 import { expect } from "chai";
 import { loadFixture } from "ethereum-waffle";
 import { BigNumber } from "ethers";
-import { AbiCoder, toUtf8Bytes } from "ethers/lib/utils";
+import { AbiCoder, keccak256, toUtf8Bytes } from "ethers/lib/utils";
 import { ethers } from "hardhat";
 import Web3 from "web3";
 
 const abi = new AbiCoder();
 const web3 = new Web3();
+const email = "user1@gmail.com";
+const email2 = "user2@gamil.com";
+const email3 = "user3@gmail.com";
 
 enum STATUS {
     NOT_YET,
@@ -42,7 +45,7 @@ describe("Voting", async function () {
         await votingManager.initialize(votingAddress, accountManagerAddress);
         await accountManager.setVotingManager(votingManagerAddress);
         await votingManager.createVoting(titleEncoded, time);
-        const firstVotingAddress = await votingManager.votings(1);
+        const firstVotingAddress = (await votingManager.votings(1)).contractAddress;
 
         const firstVoting = Voting.attach(firstVotingAddress);
 
@@ -104,17 +107,17 @@ describe("Voting", async function () {
             const content1 = abi.encode(["string"], ["Đề xuất 1"]);
             const content2 = abi.encode(["string"], ["Đề xuất 2"]);
 
-            const tx = await firstVoting.addProposal([content1, content2], [true, false]);
-
-            const reciept = await tx.wait();
-
-            // @ts-ignore
-            const contentsEvent = reciept.events[0].args[0];
+            await firstVoting.addProposal([content1, content2], [true, false]);
 
             const totalProposal = await firstVoting.totalProposal();
 
-            expect(abi.decode(["string"], contentsEvent[0])[0]).to.be.eq("Đề xuất 1");
-            expect(abi.decode(["string"], contentsEvent[1])[0]).to.be.eq("Đề xuất 2");
+            const proposals = await firstVoting.getAllProposals();
+            console.log(proposals);
+
+            expect(proposals.length).to.be.eq(2);
+            expect(abi.decode(["string"], proposals[0].content)[0]).to.be.eq("Đề xuất 1");
+            expect(abi.decode(["string"], proposals[1].content)[0]).to.be.eq("Đề xuất 2");
+
             expect(totalProposal).to.be.eq(2);
         });
     });
@@ -157,6 +160,146 @@ describe("Voting", async function () {
             expect(abi.decode(["string"], nomination2.content)[0]).to.be.eq("Bùi Văn B");
             expect(nomination3.index).to.be.eq(3);
             expect(abi.decode(["string"], nomination3.content)[0]).to.be.eq("Hà Văn C");
+        });
+    });
+
+    describe("Update proposal", async function () {
+        it("Fail: Only owner", async function () {
+            const { otherAccounts, firstVoting } = await loadFixture(deployContracts);
+            const user = otherAccounts[0];
+
+            await expect(firstVoting.connect(user).updateProposals([], [])).to.be.rejectedWith("Ownable: caller is not the owner");
+        });
+
+        it("Fail: Empty", async function () {
+            const { firstVoting } = await loadFixture(deployContracts);
+
+            await expect(firstVoting.updateProposals([], [])).to.be.rejectedWith("Empty");
+        });
+
+        it("Fail: invalid length 1", async function () {
+            const { firstVoting } = await loadFixture(deployContracts);
+
+            const content1 = ethers.utils.keccak256(toUtf8Bytes("Đề xuất 1"));
+
+            await expect(firstVoting.updateProposals([content1], [1, 2])).to.be.rejectedWith("Invalid array length");
+        });
+
+        it("Fail: invalid length 2", async function () {
+            const { firstVoting } = await loadFixture(deployContracts);
+
+            const content1 = ethers.utils.keccak256(toUtf8Bytes("Đề xuất 1"));
+
+            await expect(firstVoting.updateProposals([content1, content1], [1])).to.be.rejectedWith("Invalid array length");
+        });
+
+        it("Fail: Started (Open)", async function () {
+            const { firstVoting } = await loadFixture(deployContracts);
+            await firstVoting.setStatus(STATUS.OPEN);
+
+            const content1 = ethers.utils.keccak256(toUtf8Bytes("Đề xuất 1"));
+
+            await expect(firstVoting.updateProposals([content1], [1])).to.be.rejectedWith("Started");
+        });
+
+        it("Fail: Started (Close)", async function () {
+            const { firstVoting } = await loadFixture(deployContracts);
+            await firstVoting.setStatus(STATUS.CLOSED);
+
+            const content1 = ethers.utils.keccak256(toUtf8Bytes("Đề xuất 1"));
+
+            await expect(firstVoting.updateProposals([content1], [1])).to.be.rejectedWith("Started");
+            await firstVoting.setStatus(STATUS.NOT_YET);
+        });
+
+        it("Fail: Invalid index", async function () {
+            const { firstVoting } = await loadFixture(deployContracts);
+
+            const content1 = ethers.utils.keccak256(toUtf8Bytes("Đề xuất 1"));
+
+            await expect(firstVoting.updateProposals([content1], [10])).to.be.rejectedWith("Invalid index");
+        });
+
+        it("Complete", async function () {
+            const { firstVoting } = await loadFixture(deployContracts);
+
+            const content1 = abi.encode(["string"], ["Đề xuất 1 đã cập nhật"]);
+            await firstVoting.updateProposals([content1], [1]);
+
+            const proposal = await firstVoting.proposals(1);
+            const decoded = abi.decode(["string"], proposal.content);
+
+            expect(decoded[0]).to.be.eq("Đề xuất 1 đã cập nhật");
+        });
+    });
+
+    describe("Update nomination", async function () {
+        it("Fail: Only owner", async function () {
+            const { otherAccounts, firstVoting } = await loadFixture(deployContracts);
+            const user = otherAccounts[0];
+
+            await expect(firstVoting.connect(user).updateNominations([], [])).to.be.rejectedWith("Ownable: caller is not the owner");
+        });
+
+        it("Fail: Empty", async function () {
+            const { firstVoting } = await loadFixture(deployContracts);
+
+            await expect(firstVoting.updateNominations([], [])).to.be.rejectedWith("Empty");
+        });
+
+        it("Fail: invalid length 1", async function () {
+            const { firstVoting } = await loadFixture(deployContracts);
+
+            const content1 = ethers.utils.keccak256(toUtf8Bytes("User 1"));
+
+            await expect(firstVoting.updateNominations([content1], [1, 2])).to.be.rejectedWith("Invalid array length");
+        });
+
+        it("Fail: invalid length 2", async function () {
+            const { firstVoting } = await loadFixture(deployContracts);
+
+            const content1 = ethers.utils.keccak256(toUtf8Bytes("User 1"));
+
+            await expect(firstVoting.updateNominations([content1, content1], [1])).to.be.rejectedWith("Invalid array length");
+        });
+
+        it("Fail: Started (Open)", async function () {
+            const { firstVoting } = await loadFixture(deployContracts);
+            await firstVoting.setStatus(STATUS.OPEN);
+
+            const content1 = ethers.utils.keccak256(toUtf8Bytes("User 1"));
+
+            await expect(firstVoting.updateNominations([content1], [1])).to.be.rejectedWith("Started");
+        });
+
+        it("Fail: Started (Close)", async function () {
+            const { firstVoting } = await loadFixture(deployContracts);
+            await firstVoting.setStatus(STATUS.CLOSED);
+
+            const content1 = ethers.utils.keccak256(toUtf8Bytes("User 1"));
+
+            await expect(firstVoting.updateNominations([content1], [1])).to.be.rejectedWith("Started");
+            await firstVoting.setStatus(STATUS.NOT_YET);
+        });
+
+        it("Fail: Invalid index", async function () {
+            const { firstVoting } = await loadFixture(deployContracts);
+
+            const content1 = ethers.utils.keccak256(toUtf8Bytes("User 1"));
+
+            await expect(firstVoting.updateNominations([content1], [10])).to.be.rejectedWith("Invalid index");
+        });
+
+        it("Complete", async function () {
+            const { firstVoting } = await loadFixture(deployContracts);
+
+            const user = abi.encode(["string"], ["User 1 đã cập nhật"]);
+            await firstVoting.updateNominations([user], [1]);
+
+            const nomination = await firstVoting.nominations(1);
+            const decoded = abi.decode(["string"], nomination);
+
+            expect(decoded[0]).to.be.eq("User 1 đã cập nhật");
         });
     });
 
@@ -327,9 +470,11 @@ describe("Voting", async function () {
                 ),
             ).to.be.rejectedWith("You can't vote");
 
-            const messageHash = await accountManager.getMessageHash(owner.address, 100000);
+            const emailEncoded = abi.encode(["string"], [email]);
+            const hashEmail = keccak256(emailEncoded);
+            const messageHash = await accountManager.getMessageHash(owner.address, 100000, hashEmail);
             const signature = web3.eth.accounts.sign(messageHash, process.env.DEPLOYER_PRIVATE_KEY ?? "");
-            await accountManager.verify(100000, signature.signature);
+            await accountManager.verify(100000, signature.signature, hashEmail);
         });
 
         it("Fail: Invalid proposal", async function () {
@@ -476,14 +621,18 @@ describe("Voting", async function () {
 
             const user = otherAccounts[0];
             const delegatedUser = otherAccounts[1];
+            const emailEncoded1 = abi.encode(["string"], [email2]);
+            const hashEmail1 = keccak256(emailEncoded1);
+            const emailEncoded2 = abi.encode(["string"], [email3]);
+            const hashEmail2 = keccak256(emailEncoded2);
 
-            const messageHash1 = await accountManager.getMessageHash(delegatedUser.address, 1000);
+            const messageHash1 = await accountManager.getMessageHash(delegatedUser.address, 1000, hashEmail1);
             const signature1 = web3.eth.accounts.sign(messageHash1, process.env.DEPLOYER_PRIVATE_KEY ?? "");
-            await accountManager.connect(delegatedUser).verify(1000, signature1.signature);
+            await accountManager.connect(delegatedUser).verify(1000, signature1.signature, hashEmail1);
 
-            const messageHash2 = await accountManager.getMessageHash(user.address, 1000);
+            const messageHash2 = await accountManager.getMessageHash(user.address, 1000, hashEmail2);
             const signature2 = web3.eth.accounts.sign(messageHash2, process.env.DEPLOYER_PRIVATE_KEY ?? "");
-            await accountManager.connect(user).verify(1000, signature2.signature);
+            await accountManager.connect(user).verify(1000, signature2.signature, hashEmail2);
 
             await firstVoting.setStatus(STATUS.NOT_YET);
             await accountManager.connect(user).delegate(delegatedUser.address);
