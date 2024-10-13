@@ -21,10 +21,10 @@ async function main() {
     console.log("Account Manager is deployed at: ", accountManagerAddress);
 
     console.log("Deploy Voting Implement");
-    // const Voting = await ethers.getContractFactory("Voting");
-    // const voting = await Voting.deploy();
-    // const votingAddress = voting.address;
-    const votingAddress = data.votingImplement;
+    const Voting = await ethers.getContractFactory("Voting");
+    const voting = await Voting.deploy();
+    const votingAddress = voting.address;
+    // const votingAddress = data.votingImplement;
     console.log("Voting Implement is deployed at: ", votingAddress);
 
     console.log("Deploy Voting Manager");
