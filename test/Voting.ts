@@ -71,34 +71,18 @@ describe("Voting", async function () {
             const { otherAccounts, firstVoting } = await loadFixture(deployContracts);
             const user = otherAccounts[0];
 
-            await expect(firstVoting.connect(user).addProposal([], [])).to.be.rejectedWith("Ownable: caller is not the owner");
-        });
-
-        it("Fail: invalid length 1", async function () {
-            const { firstVoting, owner } = await loadFixture(deployContracts);
-
-            const content1 = ethers.utils.keccak256(toUtf8Bytes("Đề xuất 1"));
-
-            await expect(firstVoting.addProposal([content1], [true, false])).to.be.rejectedWith("Invalid array length");
-        });
-
-        it("Fail: invalid length 2", async function () {
-            const { firstVoting, owner } = await loadFixture(deployContracts);
-
-            const content = ethers.utils.keccak256(toUtf8Bytes("Đề xuất 1"));
-
-            await expect(firstVoting.addProposal([content, content], [true])).to.be.rejectedWith("Invalid array length");
+            await expect(firstVoting.connect(user).addProposal([])).to.be.rejectedWith("Ownable: caller is not the owner");
         });
 
         it("Faile: Empty", async function () {
             const { firstVoting, owner } = await loadFixture(deployContracts);
-            await expect(firstVoting.addProposal([], [])).to.be.rejectedWith("Empty");
+            await expect(firstVoting.addProposal([])).to.be.rejectedWith("Empty");
         });
 
         it("Fail: add emty", async function () {
             const { firstVoting } = await loadFixture(deployContracts);
             const content = abi.encode(["string"], [""]);
-            await expect(firstVoting.addProposal([content], [true])).rejectedWith("Empty content");
+            await expect(firstVoting.addProposal([{ content, isImportant: true }])).rejectedWith("Empty content");
         });
 
         it("Complete", async function () {
@@ -107,7 +91,10 @@ describe("Voting", async function () {
             const content1 = abi.encode(["string"], ["Đề xuất 1"]);
             const content2 = abi.encode(["string"], ["Đề xuất 2"]);
 
-            await firstVoting.addProposal([content1, content2], [true, false]);
+            await firstVoting.addProposal([
+                { content: content1, isImportant: true },
+                { content: content2, isImportant: false },
+            ]);
 
             const totalProposal = await firstVoting.totalProposal();
 
@@ -182,7 +169,7 @@ describe("Voting", async function () {
 
             const content1 = ethers.utils.keccak256(toUtf8Bytes("Đề xuất 1"));
 
-            await expect(firstVoting.updateProposals([content1], [1, 2])).to.be.rejectedWith("Invalid array length");
+            await expect(firstVoting.updateProposals([{ content: content1, isImportant: true }], [1, 2])).to.be.rejectedWith("Invalid array length");
         });
 
         it("Fail: invalid length 2", async function () {
@@ -190,7 +177,15 @@ describe("Voting", async function () {
 
             const content1 = ethers.utils.keccak256(toUtf8Bytes("Đề xuất 1"));
 
-            await expect(firstVoting.updateProposals([content1, content1], [1])).to.be.rejectedWith("Invalid array length");
+            await expect(
+                firstVoting.updateProposals(
+                    [
+                        { content: content1, isImportant: true },
+                        { content: content1, isImportant: false },
+                    ],
+                    [1],
+                ),
+            ).to.be.rejectedWith("Invalid array length");
         });
 
         it("Fail: Started (Open)", async function () {
@@ -199,7 +194,7 @@ describe("Voting", async function () {
 
             const content1 = ethers.utils.keccak256(toUtf8Bytes("Đề xuất 1"));
 
-            await expect(firstVoting.updateProposals([content1], [1])).to.be.rejectedWith("Started");
+            await expect(firstVoting.updateProposals([{ content: content1, isImportant: true }], [1])).to.be.rejectedWith("Started");
         });
 
         it("Fail: Started (Close)", async function () {
@@ -208,7 +203,7 @@ describe("Voting", async function () {
 
             const content1 = ethers.utils.keccak256(toUtf8Bytes("Đề xuất 1"));
 
-            await expect(firstVoting.updateProposals([content1], [1])).to.be.rejectedWith("Started");
+            await expect(firstVoting.updateProposals([{ content: content1, isImportant: false }], [1])).to.be.rejectedWith("Started");
             await firstVoting.setStatus(STATUS.NOT_YET);
         });
 
@@ -217,14 +212,14 @@ describe("Voting", async function () {
 
             const content1 = ethers.utils.keccak256(toUtf8Bytes("Đề xuất 1"));
 
-            await expect(firstVoting.updateProposals([content1], [10])).to.be.rejectedWith("Invalid index");
+            await expect(firstVoting.updateProposals([{ content: content1, isImportant: false }], [10])).to.be.rejectedWith("Invalid index");
         });
 
         it("Complete", async function () {
             const { firstVoting } = await loadFixture(deployContracts);
 
             const content1 = abi.encode(["string"], ["Đề xuất 1 đã cập nhật"]);
-            await firstVoting.updateProposals([content1], [1]);
+            await firstVoting.updateProposals([{ content: content1, isImportant: false }], [1]);
 
             const proposal = await firstVoting.proposals(1);
             const decoded = abi.decode(["string"], proposal.content);

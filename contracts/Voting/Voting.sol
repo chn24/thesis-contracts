@@ -16,7 +16,6 @@ contract Voting is Ownable2Step, IVoting {
     IAccountManager public accountManager;
 
     mapping(uint16 => Proposal) public proposals;
-    mapping(bytes => bool) public validProposal;
     mapping(uint16 => mapping(address => bool)) public isProposalVoted;
     mapping(uint16 => mapping(address => bool)) public isNominationVoted;
     mapping(uint16 => bytes) public nominations;
@@ -40,31 +39,27 @@ contract Voting is Ownable2Step, IVoting {
     }
 
     function checkBytesEmpty(bytes memory data) public pure {
-        if(data.length == 64) {
-
-        bytes memory empty = abi.encode("");
-        uint total = 0;
-        for(uint i = 0; i < data.length; i++) {
-            if(data[i] == empty[i]) {
-                total += 1;
+        if (data.length == 64) {
+            bytes memory empty = abi.encode("");
+            uint total = 0;
+            for (uint i = 0; i < data.length; i++) {
+                if (data[i] == empty[i]) {
+                    total += 1;
+                }
             }
-        }
 
-        require(total < empty.length, "Empty content");
+            require(total < empty.length, "Empty content");
         }
     }
 
-    function addProposal(bytes[] calldata contents, bool[] calldata isImportants) public onlyOwner {
-        require(contents.length == isImportants.length, "Invalid array length");
-        require(contents.length != 0, "Empty");
-        uint256 length = contents.length;
+    function addProposal(ProposalInfo[] calldata proposalInfos) public onlyOwner {
+        require(proposalInfos.length != 0, "Empty");
+        uint256 length = proposalInfos.length;
         for (uint16 i = 0; i < length; i++) {
-            checkBytesEmpty(contents[i]);
-            proposals[totalProposal + i + 1] = Proposal(contents[i], isImportants[i], 0, 0);
+            checkBytesEmpty(proposalInfos[i].content);
+            proposals[totalProposal + i + 1] = Proposal(proposalInfos[i].content, proposalInfos[i].isImportant, 0, 0);
         }
         totalProposal += uint16(length);
-
-        emit AddProposal(contents, isImportants, totalProposal - uint16(length), totalProposal);
     }
 
     function addNomination(bytes[] memory listNomination) public onlyOwner {
@@ -77,16 +72,17 @@ contract Voting is Ownable2Step, IVoting {
         totalNomination = totalNomination + uint16(length);
     }
 
-    function updateProposals(bytes[] calldata contents, uint16[] calldata proposalIdxs) public onlyOwner {
+    function updateProposals(ProposalInfo[] calldata proposalInfos, uint16[] calldata proposalIdxs) public onlyOwner {
         require(status == STATUS.NOT_YET || status == STATUS.PAUSED, "Started");
-        require(contents.length == proposalIdxs.length, "Invalid array length");
-        require(contents.length != 0, "Empty");
+        require(proposalInfos.length == proposalIdxs.length, "Invalid array length");
+        require(proposalInfos.length != 0, "Empty");
 
         uint256 len = proposalIdxs.length;
-        for(uint256 index = 0; index < len; index++) {
+        for (uint256 index = 0; index < len; index++) {
             uint16 proposalIdx = proposalIdxs[index];
             require(proposalIdx < totalProposal, "Invalid index");
-            proposals[proposalIdx].content = contents[index];
+            proposals[proposalIdx].content = proposalInfos[index].content;
+            proposals[proposalIdx].isImportant = proposalInfos[index].isImportant;
         }
     }
 
@@ -96,12 +92,11 @@ contract Voting is Ownable2Step, IVoting {
         require(listNomination.length != 0, "Empty");
 
         uint256 len = nominationIdxs.length;
-        for(uint256 index = 0; index < len; index++) {
+        for (uint256 index = 0; index < len; index++) {
             uint16 nominationIdx = nominationIdxs[index];
             require(nominationIdx < totalNomination, "Invalid index");
             nominations[nominationIdx] = listNomination[index];
         }
-
     }
 
     function vote(Answer[] calldata answers, uint16[] calldata nominationIndexs) public {
@@ -113,11 +108,10 @@ contract Voting is Ownable2Step, IVoting {
         for (uint256 i = 0; i < answers.length; i++) {
             require(answers[i].index > 0 && answers[i].index <= totalProposal, "Invalid proposal");
             require(!isProposalVoted[answers[i].index][msg.sender], "Cannot vote twice");
-            if(answers[i].option != OPTION.NO_COMMENT) {
+            if (answers[i].option != OPTION.NO_COMMENT) {
                 proposals[answers[i].index].totalVote = proposals[answers[i].index].totalVote + balance;
                 if (answers[i].option == OPTION.AGREE) {
-                proposals[answers[i].index].agreeCount = proposals[answers[i].index].agreeCount + balance;
-
+                    proposals[answers[i].index].agreeCount = proposals[answers[i].index].agreeCount + balance;
                 }
             }
             isProposalVoted[answers[i].index][msg.sender] = true;
@@ -152,7 +146,7 @@ contract Voting is Ownable2Step, IVoting {
         }
 
         NominationResult[] memory nominationResults = new NominationResult[](totalNomination);
-        for(uint16 index = 0; index < totalNomination; index ++) {
+        for (uint16 index = 0; index < totalNomination; index++) {
             (nominationResults[index].content, nominationResults[index].index, nominationResults[index].totalVote) = getResultOfNomination(index + 1);
         }
 
@@ -168,16 +162,16 @@ contract Voting is Ownable2Step, IVoting {
 
     function getAllNominations() public view returns (uint16, Nomination[] memory) {
         Nomination[] memory listNomination = new Nomination[](totalNomination);
-        for(uint16 index = 0; index < totalNomination; index ++) {
+        for (uint16 index = 0; index < totalNomination; index++) {
             listNomination[index] = Nomination(index + 1, nominations[index + 1]);
         }
 
         return (limitNominationVoted, listNomination);
     }
 
-    function getAllProposals() public view returns(Proposal[] memory) {
+    function getAllProposals() public view returns (Proposal[] memory) {
         Proposal[] memory listProposal = new Proposal[](totalProposal);
-        for(uint16 index = 0; index < totalProposal; index ++) {
+        for (uint16 index = 0; index < totalProposal; index++) {
             listProposal[index] = proposals[index + 1];
         }
         return listProposal;

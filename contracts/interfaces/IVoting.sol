@@ -40,6 +40,11 @@ interface IVoting {
         uint totalVote;
     }
 
+    struct ProposalInfo {
+        bytes content;
+        bool isImportant;
+    }
+
     struct NominationResult {
         uint16 index;
         bytes content;

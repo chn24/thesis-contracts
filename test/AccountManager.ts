@@ -44,7 +44,10 @@ describe("AccountManager", async function () {
         const content1 = abi.encode(["string"], ["abc"]);
         const content2 = abi.encode(["string"], ["def"]);
 
-        const tx = await firstVoting.addProposal([content1, content2], [true, false]);
+        const tx = await firstVoting.addProposal([
+            { content: content1, isImportant: true },
+            { content: content2, isImportant: false },
+        ]);
 
         return {
             owner,
