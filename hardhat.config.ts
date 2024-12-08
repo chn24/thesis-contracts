@@ -18,16 +18,6 @@ const config: HardhatUserConfig = {
             // gasPrice: 20000000000,
             accounts: process.env.DEPLOYER_PRIVATE_KEY ? [process.env.DEPLOYER_PRIVATE_KEY] : [],
         },
-        xchainTest: {
-            url: "https://test-rpc.xgainer.xyz",
-            chainId: 7052024,
-            accounts: [],
-        },
-        b14gTest: {
-            url: "http://206.189.38.197:32009/",
-            chainId: 19981004,
-            accounts: process.env.DEPLOYER_PRIVATE_KEY ? [process.env.DEPLOYER_PRIVATE_KEY] : [],
-        },
     },
     solidity: {
         compilers: [

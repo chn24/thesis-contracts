@@ -80,7 +80,7 @@ contract Voting is Ownable2Step, IVoting {
         uint256 len = proposalIdxs.length;
         for (uint256 index = 0; index < len; index++) {
             uint16 proposalIdx = proposalIdxs[index];
-            require(proposalIdx < totalProposal, "Invalid index");
+            require(proposalIdx <= totalProposal, "Invalid index");
             proposals[proposalIdx].content = proposalInfos[index].content;
             proposals[proposalIdx].isImportant = proposalInfos[index].isImportant;
         }
@@ -94,7 +94,7 @@ contract Voting is Ownable2Step, IVoting {
         uint256 len = nominationIdxs.length;
         for (uint256 index = 0; index < len; index++) {
             uint16 nominationIdx = nominationIdxs[index];
-            require(nominationIdx < totalNomination, "Invalid index");
+            require(nominationIdx <= totalNomination, "Invalid index");
             nominations[nominationIdx] = listNomination[index];
         }
     }
